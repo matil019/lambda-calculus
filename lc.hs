@@ -48,10 +48,9 @@ reduceBeta (App (Abs x m) n) =
 reduceBeta m = m
 
 -- | @reduceApp (App m n)@ tries to reduce @App m n@ to non-@App@ form.
--- TODO unify the meaning of @Maybe@
-reduceApp :: Term -> Maybe Term
-reduceApp (App m n) = fmap reduceBeta $ App <$> reduceApp m <*> reduceApp n
-reduceApp m = Just m
+reduceApp :: Term -> Term
+reduceApp (App m n) = reduceBeta $ App (reduceApp m) (reduceApp n)
+reduceApp m = m
 
 formatTerm :: Term -> String
 formatTerm (Var x) = [x]
@@ -59,16 +58,14 @@ formatTerm (Abs x m) = "(\\" <> [x] <> "." <> formatTerm m <> ")"
 formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 
 interpretChurchNumber :: Term -> Maybe Int
-interpretChurchNumber m' = do
-  m <- reduceApp m'
-  case m of
-    Abs f (Abs x n') -> reduceApp n' >>=
+interpretChurchNumber m =
+  case reduceApp m of
+    Abs f (Abs x n') ->
       let go (Var y) | y == x = Just 0
-          go (App (Var g) n) | g == f = fmap (1+) . go =<< reduceApp n
+          go (App (Var g) n) | g == f = fmap (1+) . go $ reduceApp n
           go _ = Nothing
-      in go
+      in go $ reduceApp n'
     _ -> Nothing
-  where
 
 main :: IO ()
 main = do
@@ -80,7 +77,7 @@ main = do
   putStrLn $ formatTerm $ App plus one
   putStrLn $ formatTerm $ reduceBeta $ App plus one
   putStrLn $ formatTerm $ App (App plus one) two
-  traverse_ (putStrLn . formatTerm) $ reduceApp $ App (App plus one) two
+  putStrLn $ formatTerm $ reduceApp $ App (App plus one) two
   traverse_ print $ interpretChurchNumber $ App (App plus one) two
   traverse_ print $ interpretChurchNumber $ App (App plus one) (App (App plus two) two)
   -- TODO fix this! (should print 3)
