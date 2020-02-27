@@ -1,6 +1,18 @@
+module Main where
+
 import Data.Foldable (traverse_)
+import Data.Functor.Const (Const(Const), getConst)
 import Data.List (find)
+import Data.Monoid (All(All), Any(Any), getAll, getAny)
 import Lens.Micro
+
+-- borrowed from "lens"
+allOf :: Getting All s a -> (a -> Bool) -> s -> Bool
+allOf l f = getAll . getConst . l (Const . All . f)
+
+-- borrowed from "lens"
+anyOf :: Getting Any s a -> (a -> Bool) -> s -> Bool
+anyOf l f = getAny . getConst . l (Const . Any . f)
 
 type Var = Char
 
@@ -26,25 +38,31 @@ freeVarsCtx' f = go []
   go bound (App m n) = App <$> go bound m <*> go bound n
 
 convertAlpha :: Var -> Term -> Term
+-- convertAlpha x (Abs y m) = Abs x $ substitute y (Var x) m ?
 convertAlpha x (Abs y m) = Abs x $ over freeVars (\z -> if z == y then x else z) m
 convertAlpha _ m = m
+
+newFreeVar :: [Var] -> Var
+newFreeVar except = case find (`notElem` except) ['a'..'z'] of
+  Just ok -> ok
+  Nothing -> error "newFreeVar: no vars available"
+
+substitute :: Var -> Term -> Term -> Term
+substitute x n (Var y)
+  | x == y    = n
+  | otherwise = Var y
+substitute x n (App m1 m2) = App (substitute x n m1) (substitute x n m2)
+substitute x n (Abs y m)
+  | x == y = Abs y m
+  | x /= y && allOf freeVars (y /=) n = Abs y (substitute x n m)
+  -- TODO not needed to recurse substitute again, but for that it needs a distinct @Abs@ type
+  | otherwise = substitute x n $ convertAlpha (newFreeVar (x : toListOf freeVars n)) (Abs y m)
 
 -- | Performs beta-reduction.
 --
 -- Automatically does alpha-conversions if needed.
 reduceBeta :: Term -> Term
-reduceBeta (App (Abs x m) n) =
-  let frees = toListOf freeVars n
-      foo (y, bound)
-        | y /= x = Var y
-        | any (`elem` (x:bound)) frees = convertAlpha (newFreeVar bound) n
-        | otherwise = n
-  in
-  over freeVarsCtx' foo m
-  where
-  newFreeVar bound = case find (`notElem` bound) ['a'..'z'] of
-    Just ok -> ok
-    Nothing -> error "newFreeVar: no vars available"
+reduceBeta (App (Abs x m) n) = substitute x n m
 reduceBeta m = m
 
 -- | @reduceApp (App m n)@ tries to reduce @App m n@ to non-@App@ form.
