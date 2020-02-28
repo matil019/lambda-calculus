@@ -2,7 +2,7 @@ module Main where
 
 import Data.Foldable (traverse_)
 import Data.Functor.Const (Const(Const), getConst)
-import Data.List (find)
+import Data.List (find, unfoldr)
 import Data.Monoid (All(All), Any(Any), getAll, getAny)
 import Lens.Micro
 
@@ -65,10 +65,11 @@ reduceBeta :: Term -> Term
 reduceBeta (App (Abs x m) n) = substitute x n m
 reduceBeta m = m
 
--- | @reduceApp (App m n)@ tries to reduce @App m n@ to non-@App@ form.
-reduceApp :: Term -> Term
-reduceApp (App m n) = reduceBeta $ App (reduceApp m) (reduceApp n)
-reduceApp m = m
+reduceStep :: Term -> Maybe Term
+reduceStep (Var _) = Nothing
+reduceStep (Abs _ _) = Nothing
+reduceStep m@(App (Abs _ _) _) = Just $ reduceBeta m
+reduceStep (App m n) = (\m' -> App m' n) <$> reduceStep m
 
 formatTerm :: Term -> String
 formatTerm (Var x) = [x]
@@ -83,10 +84,9 @@ interpretChurchNumber = \m -> go $ App (App m (Var '+') ) (Var '0')
     App (Var '+') n -> fmap (1+) $ go n
     _ -> Nothing
 
-  reduce m@(App (Var _) _) = m
-  reduce m@(App (Abs _ _) _) = reduce $ reduceBeta m
-  reduce (App m n) = reduce $ App (reduce m) n
-  reduce m = m
+  reduce m = case unfoldr (fmap (\x -> (x, x)) . reduceStep) m of
+    [] -> m
+    xs -> last xs
 
 main :: IO ()
 main = do
@@ -98,7 +98,7 @@ main = do
   putStrLn $ formatTerm $ App plus one
   putStrLn $ formatTerm $ reduceBeta $ App plus one
   putStrLn $ formatTerm $ App (App plus one) two
-  putStrLn $ formatTerm $ reduceApp $ App (App plus one) two
+  traverse_ (putStrLn . formatTerm) $ reduceStep $ App (App plus one) two
   traverse_ print $ interpretChurchNumber $ App (App plus one) two
   traverse_ print $ interpretChurchNumber $ App (App plus one) (App (App plus two) two)
   traverse_ print $ interpretChurchNumber $ App (App plus (App (App plus one) one)) one
