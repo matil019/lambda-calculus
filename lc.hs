@@ -84,8 +84,8 @@ reduceBeta (TermApp (App (TermAbs (Abs x m)) n)) = substitute x n m
 reduceBeta m = m
 
 -- | @reduceApp (App m n)@ tries to reduce @App m n@ to non-@App@ form.
-reduceApp :: Term -> Term
-reduceApp (TermApp (App m n)) = reduceBeta $ app (reduceApp m) (reduceApp n)
+reduceApp :: App -> Term
+reduceApp (App m n) = reduceBeta $ app (reduceApp m) (reduceApp n)
 reduceApp m = m
 
 formatTerm :: Term -> String
@@ -113,7 +113,7 @@ main = do
   putStrLn $ formatTerm $ app plus one
   putStrLn $ formatTerm $ reduceBeta $ app plus one
   putStrLn $ formatTerm $ app (app plus one) two
-  putStrLn $ formatTerm $ reduceApp $ app (app plus one) two
+  putStrLn $ formatTerm $ reduceApp $ App (app plus one) two
   traverse_ print $ interpretChurchNumber $ app (app plus one) two
   traverse_ print $ interpretChurchNumber $ app (app plus one) (app (app plus two) two)
   -- TODO fix this! (should print 3)
