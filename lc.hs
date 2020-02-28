@@ -76,14 +76,17 @@ formatTerm (Abs x m) = "(\\" <> [x] <> "." <> formatTerm m <> ")"
 formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 
 interpretChurchNumber :: Term -> Maybe Int
-interpretChurchNumber m =
-  case reduceApp m of
-    Abs f (Abs x n') ->
-      let go (Var y) | y == x = Just 0
-          go (App (Var g) n) | g == f = fmap (1+) . go $ reduceApp n
-          go _ = Nothing
-      in go $ reduceApp n'
+interpretChurchNumber = \m -> go $ App (App m (Var '+') ) (Var '0')
+  where
+  go m = case reduce m of
+    Var '0' -> Just 0
+    App (Var '+') n -> fmap (1+) $ go n
     _ -> Nothing
+
+  reduce m@(App (Var _) _) = m
+  reduce m@(App (Abs _ _) _) = reduce $ reduceBeta m
+  reduce (App m n) = reduce $ App (reduce m) n
+  reduce m = m
 
 main :: IO ()
 main = do
@@ -98,5 +101,4 @@ main = do
   putStrLn $ formatTerm $ reduceApp $ App (App plus one) two
   traverse_ print $ interpretChurchNumber $ App (App plus one) two
   traverse_ print $ interpretChurchNumber $ App (App plus one) (App (App plus two) two)
-  -- TODO fix this! (should print 3)
   traverse_ print $ interpretChurchNumber $ App (App plus (App (App plus one) one)) one
