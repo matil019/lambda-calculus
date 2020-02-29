@@ -70,7 +70,7 @@ substitute :: Var -> Term -> Term -> Term
 substitute x n (Var y)
   | x == y    = n
   | otherwise = Var y
-substitute x n (App m1 m2) = App (substitute x n m1) (substitute x n m2)
+substitute x n (App m1 m2) = n `seq` App (substitute x n m1) (substitute x n m2)
 substitute x n (Abs y m)
   | x == y = Abs y m
   | x /= y && allOf freeVars (y /=) n = Abs y (substitute x n m)
