@@ -22,6 +22,7 @@ executable lambda-calculus
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.13 && <4.14
+                     , QuickCheck
                      , microlens
   hs-source-dirs:      src
   default-language:    Haskell2010

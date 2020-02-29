@@ -6,7 +6,9 @@ import Data.List (find, unfoldr)
 import Data.Monoid (All(All), Any(Any), getAll, getAny)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Lens.Micro
+import Test.QuickCheck (Arbitrary, arbitrary)
 
+import qualified Test.QuickCheck as Q
 import qualified Data.List.NonEmpty as NE
 
 -- borrowed from "lens"
@@ -28,6 +30,13 @@ data Term
   | Abs Var Term
   | App Term Term
   deriving (Eq, Show)
+
+instance Arbitrary Term where
+  arbitrary = Q.oneof [Var <$> genVar, genAbs, genApp]
+    where
+    genVar = Q.elements ['a'..'z']
+    genAbs = Abs <$> genVar <*> arbitrary
+    genApp = App <$> arbitrary <*> arbitrary
 
 freeVars :: Traversal' Term Var
 freeVars f = freeVars' (fmap Var . f)
@@ -95,19 +104,9 @@ interpretChurchNumber = \m -> go $ App (App m (Var '+')) (Var '0')
 
 main :: IO ()
 main = do
-  let -- Church encodings of integers
-      one = Abs 'f' $ Abs 'x' $ App (Var 'f') (Var 'x')
-      two = Abs 'f' $ Abs 'x' $ App (Var 'f') $ App (Var 'f') (Var 'x')
-      -- \g. \h. \f. \x. (g f) ((h f) x)
-      plus = Abs 'g' $ Abs 'h' $ Abs 'f' $ Abs 'x' $ App (App (Var 'g') (Var 'f')) (App (App (Var 'h') (Var 'f')) (Var 'x'))
-  traverse_ (putStrLn . formatTerm) $ reduce $ App plus one
+  term <- Q.generate arbitrary
+  traverse_ (putStrLn . formatTerm) $ reduce term
   putStrLn "------------------------------------------------------------------------"
-  traverse_ (putStrLn . formatTerm) $ reduce $ App (App plus one) two
-  putStrLn "------------------------------------------------------------------------"
-  traverse_ (putStrLn . formatTerm) $ reduce $ App (App plus one) (App (App plus two) two)
-  putStrLn "------------------------------------------------------------------------"
-  traverse_ (putStrLn . formatTerm) $ reduce $ App (App plus (App (App plus one) one)) one
-  putStrLn "------------------------------------------------------------------------"
-  traverse_ print $ interpretChurchNumber $ App (App plus one) two
-  traverse_ print $ interpretChurchNumber $ App (App plus one) (App (App plus two) two)
-  traverse_ print $ interpretChurchNumber $ App (App plus (App (App plus one) one)) one
+  traverse_ print $ interpretChurchNumber term
+  putStrLn "========================================================================"
+  main
