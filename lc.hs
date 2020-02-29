@@ -42,8 +42,7 @@ freeVarsCtx' f = go []
   go bound (App m n) = App <$> go bound m <*> go bound n
 
 convertAlpha :: Var -> Term -> Term
--- convertAlpha x (Abs y m) = Abs x $ substitute y (Var x) m ?
-convertAlpha x (Abs y m) = Abs x $ over freeVars (\z -> if z == y then x else z) m
+convertAlpha x (Abs y m) = Abs x $ substitute y (Var x) m
 convertAlpha _ m = m
 
 newFreeVar :: [Var] -> Var
