@@ -102,11 +102,23 @@ interpretChurchNumber = \m -> go $ App (App m (Var '+')) (Var '0')
     App (Var '+') n -> fmap (1+) $ go n
     _ -> Nothing
 
+genFoo :: Q.Gen Term
+genFoo =
+  fmap (\m -> Abs 'f' (Abs 'x' m)) $ genBound ['f', 'x']
+  where
+  genBound :: [Var] -> Q.Gen Term
+  genBound bound = Q.oneof [genVar, genAbs, genApp]
+    where
+    genVar = Var <$> Q.elements bound
+    genAbs = do
+      fresh <- Q.elements ['a'..'z']
+      Abs fresh <$> genBound (fresh:bound)
+    genApp = App <$> genBound bound <*> genBound bound
+
 main :: IO ()
 main = do
-  term <- Q.generate arbitrary
-  traverse_ (putStrLn . formatTerm) $ reduce term
-  putStrLn "------------------------------------------------------------------------"
-  traverse_ print $ interpretChurchNumber term
-  putStrLn "========================================================================"
+  term <- Q.generate genFoo
+  case interpretChurchNumber term of
+    Just i -> print i
+    Nothing -> putChar '.'
   main
