@@ -1,7 +1,8 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE RankNTypes #-}
 module Main where
 
-import Control.Exception (onException)
+import Control.Exception (AsyncException(UserInterrupt), mask, throwIO, try)
 import Data.Functor.Const (Const(Const), getConst)
 import Data.Map.Strict (Map)
 import Data.List (find, unfoldr)
@@ -126,10 +127,10 @@ genFoo =
 main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
-  loop mempty
+  print =<< mask (\r -> loop r mempty)
   where
-  loop :: Map (Maybe Int) Int -> IO ()
-  loop acc = do
+  loop :: (forall a. IO a -> IO a) -> Map (Maybe Int) Int -> IO (Map (Maybe Int) Int)
+  loop restoreMask acc = do
     let calcNext = do
           term <- Q.generate genFoo
           let result = interpretChurchNumber term
@@ -137,5 +138,8 @@ main = do
             Just i -> print i
             Nothing -> putChar '.'
           pure $ Map.alter (Just . (+1) . fromMaybe 0) result acc
-    next <- calcNext `onException` print acc
-    loop next
+    result <- try $ restoreMask calcNext
+    case result of
+      Right next -> loop restoreMask next
+      Left UserInterrupt -> pure acc
+      Left e -> throwIO e
