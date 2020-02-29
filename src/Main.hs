@@ -1,15 +1,19 @@
 module Main where
 
-import Data.Foldable (traverse_)
+import Control.Exception (onException)
 import Data.Functor.Const (Const(Const), getConst)
+import Data.Map.Strict (Map)
 import Data.List (find, unfoldr)
-import Data.Monoid (All(All), Any(Any), getAll, getAny)
 import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.Maybe (fromMaybe)
+import Data.Monoid (All(All), Any(Any), getAll, getAny)
 import Lens.Micro
+import System.IO (BufferMode(NoBuffering), hSetBuffering, stdout)
 import Test.QuickCheck (Arbitrary, arbitrary)
 
-import qualified Test.QuickCheck as Q
+import qualified Data.Map.Strict as Map
 import qualified Data.List.NonEmpty as NE
+import qualified Test.QuickCheck as Q
 
 -- borrowed from "lens"
 allOf :: Getting All s a -> (a -> Bool) -> s -> Bool
@@ -117,8 +121,17 @@ genFoo =
 
 main :: IO ()
 main = do
-  term <- Q.generate genFoo
-  case interpretChurchNumber term of
-    Just i -> print i
-    Nothing -> putChar '.'
-  main
+  hSetBuffering stdout NoBuffering
+  loop mempty
+  where
+  loop :: Map (Maybe Int) Int -> IO ()
+  loop acc = do
+    let calcNext = do
+          term <- Q.generate genFoo
+          let result = interpretChurchNumber term
+          case result of
+            Just i -> print i
+            Nothing -> putChar '.'
+          pure $ Map.alter (Just . (+1) . fromMaybe 0) result acc
+    next <- calcNext `onException` print acc
+    loop next
