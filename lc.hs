@@ -14,6 +14,10 @@ allOf l f = getAll . getConst . l (Const . All . f)
 anyOf :: Getting Any s a -> (a -> Bool) -> s -> Bool
 anyOf l f = getAny . getConst . l (Const . Any . f)
 
+-- borrowed from "extra"
+dupe :: a -> (a, a)
+dupe a = (a, a)
+
 type Var = Char
 
 data Term
@@ -77,14 +81,14 @@ formatTerm (Abs x m) = "(\\" <> [x] <> "." <> formatTerm m <> ")"
 formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 
 interpretChurchNumber :: Term -> Maybe Int
-interpretChurchNumber = \m -> go $ App (App m (Var '+') ) (Var '0')
+interpretChurchNumber = \m -> go $ App (App m (Var '+')) (Var '0')
   where
   go m = case reduce m of
     Var '0' -> Just 0
     App (Var '+') n -> fmap (1+) $ go n
     _ -> Nothing
 
-  reduce m = case unfoldr (fmap (\x -> (x, x)) . reduceStep) m of
+  reduce m = case unfoldr (fmap dupe . reduceStep) m of
     [] -> m
     xs -> last xs
 
@@ -95,10 +99,16 @@ main = do
       two = Abs 'f' $ Abs 'x' $ App (Var 'f') $ App (Var 'f') (Var 'x')
       -- \g. \h. \f. \x. (g f) ((h f) x)
       plus = Abs 'g' $ Abs 'h' $ Abs 'f' $ Abs 'x' $ App (App (Var 'g') (Var 'f')) (App (App (Var 'h') (Var 'f')) (Var 'x'))
-  putStrLn $ formatTerm $ App plus one
-  putStrLn $ formatTerm $ reduceBeta $ App plus one
-  putStrLn $ formatTerm $ App (App plus one) two
-  traverse_ (putStrLn . formatTerm) $ reduceStep $ App (App plus one) two
+  traverse_ (putStrLn . formatTerm) $ steps $ App plus one
+  putStrLn "------------------------------------------------------------------------"
+  traverse_ (putStrLn . formatTerm) $ steps $ App (App plus one) two
+  putStrLn "------------------------------------------------------------------------"
+  traverse_ (putStrLn . formatTerm) $ steps $ App (App plus one) (App (App plus two) two)
+  putStrLn "------------------------------------------------------------------------"
+  traverse_ (putStrLn . formatTerm) $ steps $ App (App plus (App (App plus one) one)) one
+  putStrLn "------------------------------------------------------------------------"
   traverse_ print $ interpretChurchNumber $ App (App plus one) two
   traverse_ print $ interpretChurchNumber $ App (App plus one) (App (App plus two) two)
   traverse_ print $ interpretChurchNumber $ App (App plus (App (App plus one) one)) one
+  where
+  steps m = m : unfoldr (fmap dupe . reduceStep) m
