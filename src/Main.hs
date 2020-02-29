@@ -4,7 +4,10 @@ import Data.Foldable (traverse_)
 import Data.Functor.Const (Const(Const), getConst)
 import Data.List (find, unfoldr)
 import Data.Monoid (All(All), Any(Any), getAll, getAny)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Lens.Micro
+
+import qualified Data.List.NonEmpty as NE
 
 -- borrowed from "lens"
 allOf :: Getting All s a -> (a -> Bool) -> s -> Bool
@@ -74,6 +77,9 @@ reduceStep (Abs _ _) = Nothing
 reduceStep m@(App (Abs _ _) _) = Just $ reduceBeta m
 reduceStep (App m n) = (\m' -> App m' n) <$> reduceStep m
 
+reduce :: Term -> NonEmpty Term
+reduce m = m :| unfoldr (fmap dupe . reduceStep) m
+
 formatTerm :: Term -> String
 formatTerm (Var x) = [x]
 formatTerm (Abs x m) = "(\\" <> [x] <> "." <> formatTerm m <> ")"
@@ -82,14 +88,10 @@ formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 interpretChurchNumber :: Term -> Maybe Int
 interpretChurchNumber = \m -> go $ App (App m (Var '+')) (Var '0')
   where
-  go m = case reduce m of
+  go m = case last $ NE.take 1000 $ reduce m of
     Var '0' -> Just 0
     App (Var '+') n -> fmap (1+) $ go n
     _ -> Nothing
-
-  reduce m = case unfoldr (fmap dupe . reduceStep) m of
-    [] -> m
-    xs -> last xs
 
 main :: IO ()
 main = do
@@ -98,16 +100,14 @@ main = do
       two = Abs 'f' $ Abs 'x' $ App (Var 'f') $ App (Var 'f') (Var 'x')
       -- \g. \h. \f. \x. (g f) ((h f) x)
       plus = Abs 'g' $ Abs 'h' $ Abs 'f' $ Abs 'x' $ App (App (Var 'g') (Var 'f')) (App (App (Var 'h') (Var 'f')) (Var 'x'))
-  traverse_ (putStrLn . formatTerm) $ steps $ App plus one
+  traverse_ (putStrLn . formatTerm) $ reduce $ App plus one
   putStrLn "------------------------------------------------------------------------"
-  traverse_ (putStrLn . formatTerm) $ steps $ App (App plus one) two
+  traverse_ (putStrLn . formatTerm) $ reduce $ App (App plus one) two
   putStrLn "------------------------------------------------------------------------"
-  traverse_ (putStrLn . formatTerm) $ steps $ App (App plus one) (App (App plus two) two)
+  traverse_ (putStrLn . formatTerm) $ reduce $ App (App plus one) (App (App plus two) two)
   putStrLn "------------------------------------------------------------------------"
-  traverse_ (putStrLn . formatTerm) $ steps $ App (App plus (App (App plus one) one)) one
+  traverse_ (putStrLn . formatTerm) $ reduce $ App (App plus (App (App plus one) one)) one
   putStrLn "------------------------------------------------------------------------"
   traverse_ print $ interpretChurchNumber $ App (App plus one) two
   traverse_ print $ interpretChurchNumber $ App (App plus one) (App (App plus two) two)
   traverse_ print $ interpretChurchNumber $ App (App plus (App (App plus one) one)) one
-  where
-  steps m = m : unfoldr (fmap dupe . reduceStep) m
