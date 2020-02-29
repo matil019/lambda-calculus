@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module Main where
 
 import Control.Exception (onException)
@@ -58,7 +59,7 @@ freeVarsCtx' f = go []
   go bound (App m n) = App <$> go bound m <*> go bound n
 
 convertAlpha :: Var -> Term -> Term
-convertAlpha x (Abs y m) = Abs x $ substitute y (Var x) m
+convertAlpha x (Abs y m) = Abs x $! substitute y (Var x) m
 convertAlpha _ m = m
 
 newFreeVar :: [Var] -> Var
@@ -70,12 +71,15 @@ substitute :: Var -> Term -> Term -> Term
 substitute x n (Var y)
   | x == y    = n
   | otherwise = Var y
-substitute x n (App m1 m2) = n `seq` App (substitute x n m1) (substitute x n m2)
+substitute x n (App m1 m2) =
+  let !m1' = substitute x n m1
+      !m2' = substitute x n m2
+  in n `seq` App m1' m2'
 substitute x n (Abs y m)
   | x == y = Abs y m
-  | x /= y && allOf freeVars (y /=) n = Abs y (substitute x n m)
+  | x /= y && allOf freeVars (y /=) n = Abs y $! substitute x n m
   -- TODO not needed to recurse substitute again, but for that it needs a distinct @Abs@ type
-  | otherwise = substitute x n $ convertAlpha (newFreeVar (x : toListOf freeVars n)) (Abs y m)
+  | otherwise = substitute x n $! convertAlpha (newFreeVar (x : toListOf freeVars n)) (Abs y m)
 
 -- | Performs beta-reduction.
 --
