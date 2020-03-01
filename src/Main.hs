@@ -115,13 +115,25 @@ genFoo :: Q.Gen Term
 genFoo =
   fmap (\m -> Abs 'f' (Abs 'x' m)) $ genBound ['f', 'x']
   where
+  -- assume that the probability of picking 'genVar' is @p@
+  -- and the other two are @(1 - p) / 2@, resp.
+  -- then, to have the expected value of the number of terms to be @X@,
+  -- > p = (X + 2) / 3X
   genBound :: [Var] -> Q.Gen Term
-  genBound bound = Q.oneof [genVar, genAbs, genApp]
+  genBound bound = do
+    size <- max 1 <$> Q.getSize
+    -- @(p / 100)%@: the probability of picking 'genVar'
+    let p = 10000 * (size + 2) `div` (3 * size)
+        q = (10000 - p) `div` 2
+    Q.frequency [(p, genVar), (q, genAbs), (q, genApp)]
     where
+    -- 1 term
     genVar = Var <$> Q.elements bound
+    -- X + 1 terms
     genAbs = do
       fresh <- Q.elements ['a'..'z']
       Abs fresh <$> genBound (fresh:bound)
+    -- 2X + 1 terms
     genApp = App <$> genBound bound <*> genBound bound
 
 main :: IO ()
