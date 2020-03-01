@@ -3,8 +3,8 @@
 {-# LANGUAGE RankNTypes #-}
 module Main where
 
-import Control.Exception (AsyncException(UserInterrupt), evaluate, mask, throwIO, try)
-import Data.Conduit ((.|), ConduitT, runConduit)
+import Control.Exception (AsyncException(UserInterrupt), mask, throwIO, try)
+import Data.Conduit ((.|), ConduitT, runConduitPure)
 import Data.Map.Strict (Map)
 import Data.List (find)
 import Data.Maybe (fromMaybe)
@@ -85,21 +85,16 @@ zipWithIndexC = loop 0
         C.yield (a, i)
         loop $! i + 1
 
-interpretChurchNumber :: Term -> IO (Maybe Int)
-interpretChurchNumber = \m -> do
-  putStrLn "interpretChurchNumber begin"
-  a <- do
+interpretChurchNumber :: Term -> Maybe Int
+interpretChurchNumber = \m ->
+  go $
     let m' = App (App m (Var '+')) (Var '0')
-    runConduit
+    in
+    runConduitPure
         $ reduceSteps m'
        .| C.take 1000
-       .| C.takeWhile ((<= 10000) . countTerm)
-       .| zipWithIndexC
-       .| C.mapM (\(t, i) -> putStrLn ("step: " <> show i <> ", size: " <> show (countTerm t)) >> pure t)
+       .| C.takeWhile ((<= 10000) . countTerm) -- TODO increase the upper limit to, say, 1000000
        .| C.lastDef m'
-  result <- evaluate $ go a
-  putStrLn "interpretChurchNumber end"
-  pure result
   where
   go (Var '0') = Just 0
   go (App (Var '+') n) = fmap (1+) $ go n
@@ -139,7 +134,7 @@ main = do
   loop restoreMask acc = do
     let calcNext = do
           term <- Q.generate genFoo
-          result <- interpretChurchNumber term
+          let result = interpretChurchNumber term
           case result of
             Just i -> print i
             Nothing -> putChar '.'
