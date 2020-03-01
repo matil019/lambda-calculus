@@ -3,8 +3,8 @@
 {-# LANGUAGE RankNTypes #-}
 module Main where
 
-import Control.Exception (AsyncException(UserInterrupt), mask, throwIO, try)
-import Data.Conduit ((.|), ConduitT, runConduitPure)
+import Control.Exception (AsyncException(UserInterrupt), evaluate, mask, throwIO, try)
+import Data.Conduit ((.|), ConduitT, runConduit)
 import Data.Map.Strict (Map)
 import Data.List (find)
 import Data.Maybe (fromMaybe)
@@ -62,7 +62,9 @@ reduceStep :: Term -> Maybe Term
 reduceStep (Var _) = Nothing
 reduceStep (Abs _ _) = Nothing
 reduceStep m@(App (Abs _ _) _) = Just $ reduceBeta m
-reduceStep (App m n) = (\m' -> App m' n) <$> reduceStep m
+reduceStep (App m n) = case reduceStep m of
+  Just m' -> Just $ App m' n
+  Nothing -> App m <$> reduceStep n
 
 reduceSteps :: Monad m => Term -> ConduitT i Term m ()
 reduceSteps = C.unfold (fmap dupe . reduceStep)
@@ -83,19 +85,25 @@ zipWithIndexC = loop 0
         C.yield (a, i)
         loop $! i + 1
 
-interpretChurchNumber :: Term -> (Maybe Int)
-interpretChurchNumber = \m -> go $ App (App m (Var '+')) (Var '0')
+interpretChurchNumber :: Term -> IO (Maybe Int)
+interpretChurchNumber = \m -> do
+  putStrLn "interpretChurchNumber begin"
+  a <- do
+    let m' = App (App m (Var '+')) (Var '0')
+    runConduit
+        $ reduceSteps m'
+       .| C.take 1000
+       .| C.takeWhile ((<= 10000) . countTerm)
+       .| zipWithIndexC
+       .| C.mapM (\(t, i) -> putStrLn ("step: " <> show i <> ", size: " <> show (countTerm t)) >> pure t)
+       .| C.lastDef m'
+  result <- evaluate $ go a
+  putStrLn "interpretChurchNumber end"
+  pure result
   where
-  go m = do
-    let a = runConduitPure
-          $ reduceSteps m
-         .| C.take 1000
-         .| C.takeWhile ((<= 1000000) . countTerm)
-         .| C.lastDef m
-    case a of
-      Var '0' -> Just 0
-      App (Var '+') n -> fmap (1+) $ go n
-      _ -> Nothing
+  go (Var '0') = Just 0
+  go (App (Var '+') n) = fmap (1+) $ go n
+  go _ = Nothing
 
 genFoo :: Q.Gen Term
 genFoo =
@@ -131,7 +139,7 @@ main = do
   loop restoreMask acc = do
     let calcNext = do
           term <- Q.generate genFoo
-          let result = interpretChurchNumber term
+          result <- interpretChurchNumber term
           case result of
             Just i -> print i
             Nothing -> putChar '.'
