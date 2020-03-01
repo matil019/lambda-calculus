@@ -93,7 +93,7 @@ interpretChurchNumber = \m ->
     runConduitPure
         $ reduceSteps m'
        .| C.take 1000
-       .| C.takeWhile ((<= 10000) . countTerm) -- TODO increase the upper limit to, say, 1000000
+       .| C.takeWhile ((<= 1000000) . countTerm)
        .| C.lastDef m'
   where
   go (Var '0') = Just 0
