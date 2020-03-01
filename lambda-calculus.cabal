@@ -19,12 +19,11 @@ extra-source-files:  CHANGELOG.md
 
 executable lambda-calculus
   main-is:             Main.hs
-  -- other-modules:
+  other-modules:       Term
   -- other-extensions:
   build-depends:       base >=4.13 && <4.14
                      , QuickCheck
                      , containers
-                     , microlens
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:         -Wall

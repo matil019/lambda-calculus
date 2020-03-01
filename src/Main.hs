@@ -3,61 +3,20 @@
 module Main where
 
 import Control.Exception (AsyncException(UserInterrupt), mask, throwIO, try)
-import Data.Functor.Const (Const(Const), getConst)
 import Data.Map.Strict (Map)
 import Data.List (find, unfoldr)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (fromMaybe)
-import Data.Monoid (All(All), Any(Any), getAll, getAny)
-import Lens.Micro
 import System.IO (BufferMode(NoBuffering), hSetBuffering, stdout)
-import Test.QuickCheck (Arbitrary, arbitrary)
+import Term
 
 import qualified Data.Map.Strict as Map
 import qualified Data.List.NonEmpty as NE
 import qualified Test.QuickCheck as Q
 
--- borrowed from "lens"
-allOf :: Getting All s a -> (a -> Bool) -> s -> Bool
-allOf l f = getAll . getConst . l (Const . All . f)
-
--- borrowed from "lens"
-anyOf :: Getting Any s a -> (a -> Bool) -> s -> Bool
-anyOf l f = getAny . getConst . l (Const . Any . f)
-
 -- borrowed from "extra"
 dupe :: a -> (a, a)
 dupe a = (a, a)
-
-type Var = Char
-
-data Term
-  = Var Var
-  | Abs Var Term
-  | App Term Term
-  deriving (Eq, Show)
-
-instance Arbitrary Term where
-  arbitrary = Q.oneof [Var <$> genVar, genAbs, genApp]
-    where
-    genVar = Q.elements ['a'..'z']
-    genAbs = Abs <$> genVar <*> arbitrary
-    genApp = App <$> arbitrary <*> arbitrary
-
-freeVars :: Traversal' Term Var
-freeVars f = freeVars' (fmap Var . f)
-
-freeVars' :: Traversal Term Term Var Term
-freeVars' f = freeVarsCtx' (f . fst)
-
-freeVarsCtx' :: Traversal Term Term (Var, [Var]) Term
-freeVarsCtx' f = go []
-  where
-  go bound (Var x)
-    | x `notElem` bound = f (x, bound)
-    | otherwise = pure (Var x)
-  go bound (Abs x m) = Abs x <$> go (x:bound) m
-  go bound (App m n) = App <$> go bound m <*> go bound n
 
 convertAlpha :: Var -> Term -> Term
 convertAlpha x (Abs y m) = Abs x $! substitute y (Var x) m
@@ -78,9 +37,9 @@ substitute x n (App m1 m2) =
   in n `seq` App m1' m2'
 substitute x n (Abs y m)
   | x == y = Abs y m
-  | x /= y && allOf freeVars (y /=) n = Abs y $! substitute x n m
+  | x /= y && y `notElem` freeVars n = Abs y $! substitute x n m
   -- TODO not needed to recurse substitute again, but for that it needs a distinct @Abs@ type
-  | otherwise = substitute x n $! convertAlpha (newFreeVar (x : toListOf freeVars n)) (Abs y m)
+  | otherwise = substitute x n $! convertAlpha (newFreeVar (x : freeVars n)) (Abs y m)
 
 -- | Performs beta-reduction.
 --
