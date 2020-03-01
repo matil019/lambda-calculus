@@ -23,8 +23,9 @@ executable lambda-calculus
   -- other-extensions:
   build-depends:       base >=4.13 && <4.14
                      , QuickCheck
+                     , conduit
                      , containers
                      , deepseq
   hs-source-dirs:      src
   default-language:    Haskell2010
-  ghc-options:         -Wall
+  ghc-options:         -Wall -rtsopts

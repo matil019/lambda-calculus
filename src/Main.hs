@@ -2,16 +2,18 @@
 {-# LANGUAGE RankNTypes #-}
 module Main where
 
-import Control.Exception (AsyncException(UserInterrupt), mask, throwIO, try)
+import Control.DeepSeq (force)
+import Control.Exception (AsyncException(UserInterrupt), evaluate, mask, throwIO, try)
+import Data.Conduit ((.|), ConduitT, runConduit)
 import Data.Map.Strict (Map)
-import Data.List (find, unfoldr)
-import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.List (find)
 import Data.Maybe (fromMaybe)
 import System.IO (BufferMode(NoBuffering), hSetBuffering, stdout)
 import Term
 
+import qualified Data.Conduit as C
+import qualified Data.Conduit.Combinators as C
 import qualified Data.Map.Strict as Map
-import qualified Data.List.NonEmpty as NE
 import qualified Test.QuickCheck as Q
 
 -- borrowed from "extra"
@@ -54,21 +56,47 @@ reduceStep (Abs _ _) = Nothing
 reduceStep m@(App (Abs _ _) _) = Just $ reduceBeta m
 reduceStep (App m n) = (\m' -> App m' n) <$> reduceStep m
 
-reduce :: Term -> NonEmpty Term
-reduce m = m :| unfoldr (fmap dupe . reduceStep) m
+reduceSteps :: Monad m => Term -> ConduitT i Term m ()
+reduceSteps = C.unfold (fmap dupe . reduceStep)
 
 formatTerm :: Term -> String
 formatTerm (Var x) = [x]
 formatTerm (Abs x m) = "(\\" <> [x] <> "." <> formatTerm m <> ")"
 formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 
-interpretChurchNumber :: Term -> Maybe Int
+zipWithIndexC :: Monad m => ConduitT a (a, Int) m ()
+zipWithIndexC = loop 0
+  where
+  loop i = do
+    ma <- C.await
+    case ma of
+      Nothing -> pure ()
+      Just a -> do
+        C.yield (a, i)
+        loop $! i + 1
+
+countTerm :: Term -> Int
+countTerm (Var _) = 1
+countTerm (Abs _ m) = 1 + countTerm m
+countTerm (App m n) = 1 + countTerm m + countTerm n
+
+interpretChurchNumber :: Term -> IO (Maybe Int)
 interpretChurchNumber = \m -> go $ App (App m (Var '+')) (Var '0')
   where
-  go m = case last $ NE.take 1000 $ reduce m of
-    Var '0' -> Just 0
-    App (Var '+') n -> fmap (1+) $ go n
-    _ -> Nothing
+  go m = do
+    a <- runConduit
+       $ reduceSteps m
+      .| C.take 1000
+      .| zipWithIndexC
+      .| C.mapM (\(a, i) -> do
+           putStrLn $ "interpretChurchNumber.go step: " <> show i <> " , size: " <> show (countTerm a)
+           pure a
+           )
+      .| C.lastDef m
+    case a of
+      Var '0' -> pure $ Just 0
+      App (Var '+') n -> fmap (1+) <$> go n
+      _ -> pure Nothing
 
 genFoo :: Q.Gen Term
 genFoo =
@@ -103,11 +131,11 @@ main = do
   loop :: (forall a. IO a -> IO a) -> Map (Maybe Int) Int -> IO (Map (Maybe Int) Int)
   loop restoreMask acc = do
     let calcNext = do
+          putStrLn "main.loop: step 1"
           term <- Q.generate genFoo
-          let result = interpretChurchNumber term
-          case result of
-            Just i -> print i
-            Nothing -> putChar '.'
+          putStrLn "main.loop: step 2"
+          result <- evaluate . force =<< interpretChurchNumber term
+          putStrLn "main.loop: step 3"
           pure $ Map.alter (Just . (+1) . fromMaybe 0) result acc
     result <- try $ restoreMask calcNext
     case result of
