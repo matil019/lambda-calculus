@@ -90,7 +90,7 @@ interpretChurchNumber = \m -> go $ App (App m (Var '+')) (Var '0')
     let a = runConduitPure
           $ reduceSteps m
          .| C.take 1000
-         -- TODO stop conduit if a number of sub-terms exceeds a certain limit
+         .| C.takeWhile ((<= 1000000) . countTerm)
          .| C.lastDef m
     case a of
       Var '0' -> Just 0
