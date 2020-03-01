@@ -19,6 +19,7 @@ data TermRaw
 data Term = Term
   { termRaw :: TermRaw
   , freeVars :: [Var]
+  , size :: Int
   }
   deriving (Eq, Generic, NFData, Show)
 
@@ -29,6 +30,7 @@ pattern Var x <- Term { termRaw = VarRaw x }
   Var x = Term
     { termRaw = VarRaw x
     , freeVars = [x]
+    , size = 1
     }
 
 -- | A smart constructor which matches 'termRaw' and handles other fields transparently.
@@ -40,6 +42,9 @@ pattern Abs x m <- Term { termRaw = AbsRaw x m }
     , freeVars =
         let Term{freeVars=fm} = m
         in delete x fm
+    , size =
+        let Term{size=sm} = m
+        in 1 + sm
     }
 
 -- | A smart constructor which matches 'termRaw' and handles other fields transparently.
@@ -52,6 +57,14 @@ pattern App m n <- Term { termRaw = AppRaw m n }
         let Term{freeVars=fm} = m
             Term{freeVars=fn} = n
         in union fm fn
+    , size =
+        let Term{size=sm} = m
+            Term{size=sn} = n
+        in 1 + sm + sn
     }
 
 {-# COMPLETE Var, Abs, App #-}
+
+-- | An alias of 'size'
+countTerm :: Term -> Int
+countTerm = size

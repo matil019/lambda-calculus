@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 module Main where
 
@@ -9,6 +10,14 @@ import Data.List (find)
 import Data.Maybe (fromMaybe)
 import System.IO (BufferMode(NoBuffering), hSetBuffering, stdout)
 import Term
+  ( Term
+  , Var
+  , countTerm
+  , freeVars
+  , pattern Abs
+  , pattern App
+  , pattern Var
+  )
 
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
@@ -73,11 +82,6 @@ zipWithIndexC = loop 0
       Just a -> do
         C.yield (a, i)
         loop $! i + 1
-
-countTerm :: Term -> Int
-countTerm (Var _) = 1
-countTerm (Abs _ m) = 1 + countTerm m
-countTerm (App m n) = 1 + countTerm m + countTerm n
 
 interpretChurchNumber :: Term -> (Maybe Int)
 interpretChurchNumber = \m -> go $ App (App m (Var '+')) (Var '0')
