@@ -1,7 +1,11 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PatternSynonyms #-}
 module Term where
 
+import Control.DeepSeq (NFData)
 import Data.List (delete, union)
+import GHC.Generics (Generic)
 
 type Var = Char
 
@@ -9,14 +13,14 @@ data TermRaw
   = VarRaw Var        -- ^ A variable
   | AbsRaw Var Term   -- ^ An abstraction
   | AppRaw Term Term  -- ^ An application
-  deriving (Eq, Show)
+  deriving (Eq, Generic, NFData, Show)
 
 -- | A lambda termRaw and its metadata.
 data Term = Term
   { termRaw :: TermRaw
   , freeVars :: [Var]
   }
-  deriving (Eq, Show)
+  deriving (Eq, Generic, NFData, Show)
 
 -- | A smart constructor which matches 'termRaw' and handles other fields transparently.
 pattern Var :: Var -> Term
