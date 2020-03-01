@@ -2,9 +2,8 @@
 {-# LANGUAGE RankNTypes #-}
 module Main where
 
-import Control.DeepSeq (force)
-import Control.Exception (AsyncException(UserInterrupt), evaluate, mask, throwIO, try)
-import Data.Conduit ((.|), ConduitT, runConduit)
+import Control.Exception (AsyncException(UserInterrupt), mask, throwIO, try)
+import Data.Conduit ((.|), ConduitT, runConduitPure)
 import Data.Map.Strict (Map)
 import Data.List (find)
 import Data.Maybe (fromMaybe)
@@ -80,23 +79,19 @@ countTerm (Var _) = 1
 countTerm (Abs _ m) = 1 + countTerm m
 countTerm (App m n) = 1 + countTerm m + countTerm n
 
-interpretChurchNumber :: Term -> IO (Maybe Int)
+interpretChurchNumber :: Term -> (Maybe Int)
 interpretChurchNumber = \m -> go $ App (App m (Var '+')) (Var '0')
   where
   go m = do
-    a <- runConduit
-       $ reduceSteps m
-      .| C.take 1000
-      .| zipWithIndexC
-      .| C.mapM (\(a, i) -> do
-           putStrLn $ "interpretChurchNumber.go step: " <> show i <> " , size: " <> show (countTerm a)
-           pure a
-           )
-      .| C.lastDef m
+    let a = runConduitPure
+          $ reduceSteps m
+         .| C.take 1000
+         -- TODO stop conduit if a number of sub-terms exceeds a certain limit
+         .| C.lastDef m
     case a of
-      Var '0' -> pure $ Just 0
-      App (Var '+') n -> fmap (1+) <$> go n
-      _ -> pure Nothing
+      Var '0' -> Just 0
+      App (Var '+') n -> fmap (1+) $ go n
+      _ -> Nothing
 
 genFoo :: Q.Gen Term
 genFoo =
@@ -131,12 +126,12 @@ main = do
   loop :: (forall a. IO a -> IO a) -> Map (Maybe Int) Int -> IO (Map (Maybe Int) Int)
   loop restoreMask acc = do
     let calcNext = do
-          putStrLn "main.loop: step 1"
           term <- Q.generate genFoo
-          putStrLn "main.loop: step 2"
-          result <- evaluate . force =<< interpretChurchNumber term
-          putStrLn "main.loop: step 3"
-          pure $ Map.alter (Just . (+1) . fromMaybe 0) result acc
+          let result = interpretChurchNumber term
+          case result of
+            Just i -> print i
+            Nothing -> putChar '.'
+          pure $! Map.alter (Just . (+1) . fromMaybe 0) result acc
     result <- try $ restoreMask calcNext
     case result of
       Right next -> loop restoreMask next
