@@ -173,7 +173,7 @@ genTerm fv = case fv of
 -- | Generates a modified 'Term'.
 --
 -- Picks a random sub-term and replaces it with a fresh one.
-genModifiedTerm :: Term -> Gen Term
-genModifiedTerm m = do
+genModifiedTerm :: Set Var -> Term -> Gen Term
+genModifiedTerm fv m = do
   i <- Q.choose (0, countTerm m - 1)
-  flip (ixBound i) m $ \BoundTerm{boundVars} -> genTerm $ Set.toList boundVars
+  flip (ixBound i) m $ \BoundTerm{boundVars} -> genTerm $ Set.toList (fv <> boundVars)
