@@ -4,10 +4,10 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
-import Control.Exception (AsyncException(UserInterrupt), mask, throwIO, try)
-import Data.Conduit ((.|), ConduitT, runConduitPure)
+import Control.Exception (AsyncException(UserInterrupt), mask, throwIO)
+import Control.Monad.IO.Class (liftIO)
+import Data.Conduit ((.|), ConduitT, runConduit, runConduitPure)
 import Data.Foldable (traverse_)
-import Data.Map.Strict (Map)
 import Data.List (find)
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
@@ -142,29 +142,40 @@ resultScore Result{..} = sum $ map btoi
 
 main :: IO ()
 main = do
-  m <- Q.generate $ genTerm Set.empty
-  traverse_ (\(r, n) -> print (r, resultScore r, n)) . Map.toList =<< mask (\r -> loop r (resultScore (runTerm m), m) mempty)
+  summary <- mask $ \r -> runConduit
+     $ C.catchC (go r) (\e -> case e of
+         UserInterrupt -> mempty
+         _ -> liftIO $ throwIO e
+         )
+    .| C.iterM (\(_, result, _) -> print result)
+    .| C.foldl (\acc (_, result, score) -> Map.alter (Just . (+1) . fromMaybe 0) (score, result) acc) Map.empty
+  traverse_ print . map (\((a, b), c) -> (a, b, c)) $ Map.toList summary
   where
   zero = encodeChurchNumber 0
   one = encodeChurchNumber 1
   two = encodeChurchNumber 2
-  loop :: (forall a. IO a -> IO a) -> (Int, Term) -> Map Result Int -> IO (Map Result Int)
-  loop restoreMask (bestScore, bestTerm) acc = do
-    result <- try $ restoreMask $ do
-      m <- Q.generate $ genModifiedTerm Set.empty bestTerm
-      let result = runTerm m
-      print result
-      let next = Map.alter (Just . (+1) . fromMaybe 0) result acc
-      pure $! next `seq` (m, result, next)
-    case result of
-      Right (m, r, next) ->
-        let score = resultScore r
-        in
-        if score >= bestScore
-        then loop restoreMask (score, m) next
-        else loop restoreMask (bestScore, bestTerm) next
-      Left UserInterrupt -> pure acc
-      Left e -> throwIO e
+
+  go :: (forall a. IO a -> IO a) -> ConduitT i (Term, Result, Int) IO ()
+  go restoreMask = do
+    (m, result, score) <- liftIO $ restoreMask $ do
+      m <- Q.generate $ genTerm Set.empty
+      let !result = runTerm m
+          !score = resultScore result
+      pure $! (m, result, score)
+    C.yield (m, result, score)
+    loop m score
+    where
+    loop :: Term -> Int -> ConduitT i (Term, Result, Int) IO ()
+    loop bestTerm bestScore = do
+      (m, result, score) <- liftIO $ restoreMask $ do
+        m <- liftIO $ Q.generate $ genModifiedTerm Set.empty bestTerm
+        let !result = runTerm m
+            !score = resultScore result
+        pure $! (m, result, score)
+      C.yield (m, result, score)
+      if score >= bestScore
+        then loop m score
+        else loop bestTerm score
 
   runTerm :: Term -> Result
   runTerm m = Result
