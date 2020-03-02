@@ -38,7 +38,6 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import qualified Genetic
 import qualified Test.QuickCheck as Q
 
 -- borrowed from "extra"
@@ -47,6 +46,9 @@ dupe a = (a, a)
 
 average :: NonEmpty Double -> Double
 average xs = sum xs / realToFrac (length xs)
+
+log10 :: Double -> Double
+log10 x = log x / log 10
 
 convertAlpha :: Var -> Term -> Term
 convertAlpha x (Abs y m) = Abs x $! substitute y (Var x) m
@@ -156,7 +158,7 @@ resultScore Result{..} = sum $ map btoi
   btoi False = 0
 
 data Event
-  = RunEvent (Term, Result, Int, Seconds)
+  = RunEvent (Term, Result, Double, Seconds)
   | GenEvent (Double, Double)
 
 main :: IO ()
@@ -194,7 +196,7 @@ main = do
         GenEvent (avg, szavg) -> do
           liftIO $ putStrLn $ formatLabeled
             [ ("generation", show genIdx)
-            , ("average", show avg)
+            , ("score avg", show avg)
             , ("size avg", show szavg)
             ]
           C.yield evt
@@ -211,32 +213,32 @@ main = do
     terms <- liftIO $ Q.generate $ replicateM numPopulation arbitrary
     -- POPUlation
     popu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
-    C.yield $ GenEvent
-      ( maybe 0 average $ nonEmpty $ map (\Individual{score} -> realToFrac score) popu
-      , maybe 0 average $ nonEmpty $ map (\Individual{individual} -> realToFrac $ countTerm $ unClosedTerm individual) popu
-      )
+    C.yield $ mkGenEvent popu
     loop popu
     where
     loop prevPopu = do
-      terms <- liftIO $ Q.generate $ newGeneration prevPopu
+      terms <- liftIO $ Q.generate $ newGeneration $ map (\(m, score) -> Individual m (max 1 $ round (score * 1000))) prevPopu
       nextPopu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
-      let mergedPopu = take numPopulation $ sortOn (\Individual{score} -> Down score) (nextPopu <> prevPopu)
-      C.yield $ GenEvent
-        ( maybe 0 average $ nonEmpty $ map (\Individual{score} -> realToFrac score) mergedPopu
-        , maybe 0 average $ nonEmpty $ map (\Individual{individual} -> realToFrac $ countTerm $ unClosedTerm individual) mergedPopu
-        )
+      let mergedPopu = take numPopulation $ sortOn (\(_, score) -> Down score) (nextPopu <> prevPopu)
+      C.yield $ mkGenEvent mergedPopu
       loop mergedPopu
 
     numPopulation = 1000
 
-    runMeasureYield :: ClosedTerm -> ConduitT i (Term, Result, Int, Seconds) IO (Individual ClosedTerm)
+    mkGenEvent :: [(ClosedTerm, Double)] -> Event
+    mkGenEvent popu = GenEvent
+      ( maybe 0 average $ nonEmpty $ map (\(_, score) -> score) popu
+      , maybe 0 average $ nonEmpty $ map (\(m, _) -> realToFrac $ countTerm $ unClosedTerm m) popu
+      )
+
+    runMeasureYield :: ClosedTerm -> ConduitT i (Term, Result, Double, Seconds) IO (ClosedTerm, Double)
     runMeasureYield m = do
       (time, (result, score)) <- liftIO $ duration $ do
         let !result = runTerm $ unClosedTerm m
-            !score = resultScore result
+            !score = realToFrac (resultScore result) - log10 (realToFrac $ countTerm $ unClosedTerm m) / 10
         pure $! (result, score)
       C.yield (unClosedTerm m, result, score, time)
-      pure $ Individual m score
+      pure (m, score)
 
   zero = encodeChurchNumber 0
   one  = encodeChurchNumber 1
