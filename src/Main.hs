@@ -16,6 +16,7 @@ import Term
   , Var
   , countTerm
   , freeVars
+  , genModifiedTerm
   , genTerm
   , pattern Abs
   , pattern App
@@ -141,28 +142,38 @@ resultScore Result{..} = sum $ map btoi
 
 main :: IO ()
 main = do
-  traverse_ (\(r, n) -> print (r, resultScore r, n)) . Map.toList =<< mask (\r -> loop r mempty)
+  m <- Q.generate $ genTerm Set.empty
+  traverse_ (\(r, n) -> print (r, resultScore r, n)) . Map.toList =<< mask (\r -> loop r (resultScore (runTerm m), m) mempty)
   where
   zero = encodeChurchNumber 0
   one = encodeChurchNumber 1
   two = encodeChurchNumber 2
-  loop :: (forall a. IO a -> IO a) -> Map Result Int -> IO (Map Result Int)
-  loop restoreMask acc = do
+  loop :: (forall a. IO a -> IO a) -> (Int, Term) -> Map Result Int -> IO (Map Result Int)
+  loop restoreMask (bestScore, bestTerm) acc = do
     result <- try $ restoreMask $ do
-      m <- Q.generate $ genTerm Set.empty
-      let result = Result
-            { r0p0 = interpretChurchNumber (App (App m zero) zero)
-            , r0p1 = interpretChurchNumber (App (App m zero) one)
-            , r1p0 = interpretChurchNumber (App (App m one ) zero)
-            , r1p1 = interpretChurchNumber (App (App m one ) one)
-            , r1p2 = interpretChurchNumber (App (App m one ) two)
-            , r2p0 = interpretChurchNumber (App (App m two ) zero)
-            , r2p1 = interpretChurchNumber (App (App m two ) one)
-            , r2p2 = interpretChurchNumber (App (App m two ) two)
-            }
+      m <- Q.generate $ genModifiedTerm Set.empty bestTerm
+      let result = runTerm m
       print result
-      pure $! Map.alter (Just . (+1) . fromMaybe 0) result acc
+      let next = Map.alter (Just . (+1) . fromMaybe 0) result acc
+      pure $! next `seq` (m, result, next)
     case result of
-      Right next -> loop restoreMask next
+      Right (m, r, next) ->
+        let score = resultScore r
+        in
+        if score >= bestScore
+        then loop restoreMask (score, m) next
+        else loop restoreMask (bestScore, bestTerm) next
       Left UserInterrupt -> pure acc
       Left e -> throwIO e
+
+  runTerm :: Term -> Result
+  runTerm m = Result
+    { r0p0 = interpretChurchNumber (App (App m zero) zero)
+    , r0p1 = interpretChurchNumber (App (App m zero) one)
+    , r1p0 = interpretChurchNumber (App (App m one ) zero)
+    , r1p1 = interpretChurchNumber (App (App m one ) one)
+    , r1p2 = interpretChurchNumber (App (App m one ) two)
+    , r2p0 = interpretChurchNumber (App (App m two ) zero)
+    , r2p1 = interpretChurchNumber (App (App m two ) one)
+    , r2p2 = interpretChurchNumber (App (App m two ) two)
+    }
