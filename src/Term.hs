@@ -19,7 +19,7 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 import qualified Test.QuickCheck as Q
 
-type Var = Char
+type Var = String
 
 data TermRaw
   = VarRaw Var        -- ^ A variable
@@ -166,7 +166,8 @@ genTerm fv =
   genVar = Var <$> Q.elements (Set.toList fv)
   -- X + 1 terms
   genAbs = do
-    fresh <- Q.elements ['a'..'z']
+    -- TODO widen the range of fresh var?
+    fresh <- Q.elements $ map pure ['a'..'z']
     Abs fresh <$> genTerm (Set.insert fresh fv)
   -- 2X + 1 terms
   genApp = App <$> genTerm fv <*> genTerm fv

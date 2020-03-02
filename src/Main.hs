@@ -55,9 +55,12 @@ convertAlpha x (Abs y m) = Abs x $! substitute y (Var x) m
 convertAlpha _ m = m
 
 newFreeVar :: Set Var -> Var
-newFreeVar except = case find (`Set.notMember` except) ['a'..'z'] of
+newFreeVar except = case find (`Set.notMember` except) infinitealphabets of
   Just ok -> ok
   Nothing -> error "newFreeVar: no vars available"
+  where
+  -- infinite list of strings, "a" : "b" : ... : "z" : "aa" : "ab" : ...
+  infinitealphabets = concat $ iterate (\ss -> [ c:s | c <- ['a'..'z'], s <- ss ]) [ [c] | c <- ['a'..'z'] ]
 
 substitute :: Var -> Term -> Term -> Term
 substitute x n (Var y)
@@ -92,8 +95,8 @@ reduceSteps :: Monad m => Term -> ConduitT i Term m ()
 reduceSteps = C.unfold (fmap dupe . reduceStep)
 
 formatTerm :: Term -> String
-formatTerm (Var x) = [x]
-formatTerm (Abs x m) = "(\\" <> [x] <> "." <> formatTerm m <> ")"
+formatTerm (Var x) = x
+formatTerm (Abs x m) = "(\\" <> x <> "." <> formatTerm m <> ")"
 formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 
 zipWithIndexC :: Monad m => ConduitT a (a, Int) m ()
@@ -110,7 +113,7 @@ zipWithIndexC = loop 0
 interpretChurchNumber :: Term -> Maybe Int
 interpretChurchNumber = \m ->
   go $
-    let m' = App (App m (Var '+')) (Var '0')
+    let m' = App (App m (Var "+")) (Var "0")
     in
     runConduitPure
         $ reduceSteps m'
@@ -118,17 +121,17 @@ interpretChurchNumber = \m ->
        .| C.takeWhile ((<= 1000000) . countTerm)
        .| C.lastDef m'
   where
-  go (Var '0') = Just 0
-  go (App (Var '+') n) = fmap (1+) $ go n
+  go (Var "0") = Just 0
+  go (App (Var "+") n) = fmap (1+) $ go n
   go _ = Nothing
 
 genChurchNumber :: Q.Gen Term
-genChurchNumber = Abs 'f' . Abs 'x' <$> genTerm (Set.fromList ['f', 'x'])
+genChurchNumber = Abs "f" . Abs "x" <$> genTerm (Set.fromList ["f", "x"])
 
 encodeChurchNumber :: Int -> Term
 encodeChurchNumber n
   | n < 0 = error "encodeNat: negative number"
-  | otherwise = Abs 'f' $ Abs 'x' $ iterate (App (Var 'f')) (Var 'x') !! n
+  | otherwise = Abs "f" $ Abs "x" $ iterate (App (Var "f")) (Var "x") !! n
 
 data Result = Result
   { r0p0 :: Maybe Int
