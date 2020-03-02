@@ -5,7 +5,10 @@ module Term where
 
 import Control.DeepSeq (NFData)
 import Data.List (delete, union)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import GHC.Generics (Generic)
+
+import qualified Data.List.NonEmpty as NE
 
 type Var = Char
 
@@ -68,3 +71,34 @@ pattern App m n <- Term { termRaw = AppRaw m n }
 -- | An alias of 'size'
 countTerm :: Term -> Int
 countTerm = size
+
+-- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
+-- traversed in depth-first, pre-order.
+--
+-- The first element is always @m@.
+linear :: Term -> NonEmpty Term
+linear m = m :| case m of
+  Var _ -> []
+  Abs _ n -> NE.toList $ linear n
+  App n1 n2 -> NE.toList $ linear n1 <> linear n2
+
+-- | This list can never be empty. See 'linear'
+toList :: Term -> [Term]
+toList = NE.toList . linear
+
+-- | @index i m@ traverses @m@ to find a sub-term.
+--
+-- @m@ is traversed in depth-first, pre-order. @i == 0@ denotes @m@ itself.
+--
+-- > index 0 m == Just m
+-- > index 3 ('App' ('App' ('Var' \'x\') n) o) == Just n
+--
+-- Another equivalence:
+-- > 'toList' m !! i == fromJust ('index' i m)
+index :: Int -> Term -> Maybe Term
+index i m = at i (toList m)
+  where
+  at j xs
+    | j < 0 = Nothing
+    | (x:_) <- drop j xs = Just x
+    | otherwise = Nothing
