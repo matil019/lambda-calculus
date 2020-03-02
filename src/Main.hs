@@ -221,17 +221,21 @@ main = do
     loop popu
     where
     loop prevPopu = do
-      terms <- liftIO $ Q.generate $ newGeneration $ map (\(m, score) -> Individual m (max 1 $ round (score * 1000))) prevPopu
+      terms <- liftIO $ Q.generate $ newGeneration $ map (\(m, score) -> Individual m (scoreToWeight score)) prevPopu
       nextPopu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
       mergedPopu <- liftIO $ Q.generate $ do
         let bothPopu = sortOn (\(_, score) -> Down score) (nextPopu <> prevPopu)
             numElite = numPopulation `div` 10
             numRandom = numPopulation - numElite
             (elitePopu, badPopu) = splitAt numElite bothPopu
-        randomPopu <- replicateM numRandom $ Q.elements badPopu
+        randomPopu <-
+          let weighted = map (\x@(_, score) -> (scoreToWeight score, pure x)) badPopu
+          in replicateM numRandom $ Q.frequency weighted
         pure $ elitePopu <> randomPopu
       C.yield $ mkGenEvent mergedPopu
       loop mergedPopu
+
+    scoreToWeight score = max 1 $ round $ 1000 * score
 
     numPopulation = 1000
 
