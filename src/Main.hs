@@ -17,6 +17,7 @@ import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Genetic (Individual(Individual), newGeneration)
+import System.IO (BufferMode(LineBuffering), hSetBuffering, stdout)
 import System.Time.Extra (Seconds, duration)
 import Term
   ( ClosedTerm
@@ -160,6 +161,7 @@ data Event
 
 main :: IO ()
 main = do
+  hSetBuffering stdout LineBuffering
   summary <- mask $ \restoreMask -> runConduit
      $ C.catchC (geneAlgo .| C.mapM (\a -> restoreMask $ pure a)) (\e -> case e of
          UserInterrupt -> mempty
@@ -173,10 +175,6 @@ main = do
     .| C.foldl (\acc (result, score) -> Map.alter (Just . (+1) . fromMaybe (0 :: Int)) (score, result) acc) Map.empty
   traverse_ print . map (\((a, b), c) -> (a, b, c)) $ Map.toList summary
   where
-  zero = encodeChurchNumber 0
-  one = encodeChurchNumber 1
-  two = encodeChurchNumber 2
-
   iterPrintEvent :: ConduitT Event Event IO ()
   iterPrintEvent = loop (0 :: Int) (0 :: Int)
     where
@@ -218,7 +216,7 @@ main = do
     loop prevPopu = do
       terms <- liftIO $ Q.generate $ newGeneration prevPopu
       nextPopu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
-      let mergedPopu = take numPopulation $ sortOn (\Individual{score} -> Down score) (prevPopu <> nextPopu)
+      let mergedPopu = take numPopulation $ sortOn (\Individual{score} -> Down score) (nextPopu <> prevPopu)
       C.yield $ GenEvent $ maybe 0 average $ nonEmpty $ map (\Individual{score} -> realToFrac score) mergedPopu
       loop mergedPopu
 
@@ -232,6 +230,10 @@ main = do
         pure $! (result, score)
       C.yield (unClosedTerm m, result, score, time)
       pure $ Individual m score
+
+  zero = encodeChurchNumber 0
+  one  = encodeChurchNumber 1
+  two  = encodeChurchNumber 2
 
   runTerm :: Term -> Result
   runTerm m = Result
