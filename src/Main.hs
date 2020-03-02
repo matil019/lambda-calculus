@@ -10,7 +10,7 @@ import Control.Exception (AsyncException(UserInterrupt), mask, throwIO)
 import Control.Monad (replicateM)
 import Control.Monad.IO.Class (liftIO)
 import Data.Conduit ((.|), ConduitT, runConduit, runConduitPure)
-import Data.Foldable (traverse_)
+import Data.Foldable (for_, traverse_)
 import Data.Ord (Down(Down))
 import Data.List (find, intercalate, sortOn)
 import Data.Maybe (fromMaybe)
@@ -150,6 +150,10 @@ resultScore Result{..} = sum $ map btoi
   btoi True  = 1
   btoi False = 0
 
+data Event
+  = RunEvent (Term, Result, Int, Seconds)
+  | GenEvent
+
 main :: IO ()
 main = do
   summary <- mask $ \restoreMask -> runConduit
@@ -157,14 +161,11 @@ main = do
          UserInterrupt -> mempty
          _ -> liftIO $ throwIO e
          )
-    .| zipWithIndexC
-    .| C.iterM (\((term, _, score, time), idx) -> putStrLn $ formatLabeled
-         [ ("#",     show idx)
-         , ("score", show score)
-         , ("size",  show $ countTerm term)
-         , ("time",  printf "%.4f" time)
-         ])
-    .| C.map (\((_, result, score, _), _) -> (result, score))
+    .| iterPrintEvent
+    .| C.concatMap (\evt -> case evt of
+         RunEvent (_, result, score, _) -> Just (result, score)
+         GenEvent -> Nothing
+         )
     .| C.foldl (\acc (result, score) -> Map.alter (Just . (+1) . fromMaybe (0 :: Int)) (score, result) acc) Map.empty
   traverse_ print . map (\((a, b), c) -> (a, b, c)) $ Map.toList summary
   where
@@ -172,22 +173,45 @@ main = do
   one = encodeChurchNumber 1
   two = encodeChurchNumber 2
 
+  iterPrintEvent :: ConduitT Event Event IO ()
+  iterPrintEvent = loop (0 :: Int) (0 :: Int)
+    where
+    loop !runIdx !genIdx = do
+      mevt <- C.await
+      for_ mevt $ \evt -> case evt of
+        RunEvent (term, _, score, time) -> do
+          liftIO $ putStrLn $ formatLabeled
+            [ ("#gen",  show genIdx)
+            , ("#step", show runIdx)
+            , ("score", show score)
+            , ("size",  show $ countTerm term)
+            , ("time",  printf "%.4f" time)
+            ]
+          C.yield evt
+          loop (runIdx + 1) genIdx
+        GenEvent -> do
+          liftIO $ putStrLn $ "generation: " <> show genIdx
+          C.yield evt
+          loop runIdx (genIdx + 1)
+
   formatLabeled :: [(String, String)] -> String
   formatLabeled = intercalate ", " . map (\(k, v) -> k <> ": " <> v)
 
   -- Here, ConduitT is used like the Writer monad; the procedure is described with
   -- monadic binding, whereas the progress is written (by 'yield') to downstream so
   -- that it can be handled outside.
-  geneAlgo :: ConduitT i (Term, Result, Int, Seconds) IO r
+  geneAlgo :: ConduitT i Event IO r
   geneAlgo = do
+    C.yield GenEvent
     terms <- liftIO $ Q.generate $ replicateM 100 arbitrary
     -- POPUlation
-    popu <- traverse runMeasureYield terms
+    popu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
     loop popu
     where
     loop prevPopu = do
+      C.yield GenEvent
       terms <- liftIO $ Q.generate $ newGeneration prevPopu
-      nextPopu <- traverse runMeasureYield terms
+      nextPopu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
       loop $ take 100 $ sortOn (\Individual{score} -> Down score) (prevPopu <> nextPopu)
 
     runMeasureYield :: ClosedTerm -> ConduitT i (Term, Result, Int, Seconds) IO (Individual ClosedTerm)
