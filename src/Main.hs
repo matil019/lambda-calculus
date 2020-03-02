@@ -188,7 +188,7 @@ main = do
       C.yield $ State (m, result, score) (bestTerm, bestScore)
       if score >= bestScore
         then loop m score
-        else loop bestTerm score
+        else loop bestTerm bestScore
 
   runTerm :: Term -> Result
   runTerm m = Result
