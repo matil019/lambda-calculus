@@ -8,7 +8,7 @@ import Control.Exception (AsyncException(UserInterrupt), mask, throwIO)
 import Control.Monad.IO.Class (liftIO)
 import Data.Conduit ((.|), ConduitT, runConduit, runConduitPure)
 import Data.Foldable (traverse_)
-import Data.List (find)
+import Data.List (find, intercalate)
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Term
@@ -140,6 +140,9 @@ resultScore Result{..} = sum $ map btoi
   btoi True  = 1
   btoi False = 0
 
+-- latest and best
+data State = State (Term, Result, Int) (Term, Int)
+
 main :: IO ()
 main = do
   summary <- mask $ \r -> runConduit
@@ -147,32 +150,42 @@ main = do
          UserInterrupt -> mempty
          _ -> liftIO $ throwIO e
          )
-    .| C.iterM (\(term, _, score) -> putStrLn $ "size: " <> show (countTerm term) <> ", score: " <> show score)
-    .| C.foldl (\acc (_, result, score) -> Map.alter (Just . (+1) . fromMaybe 0) (score, result) acc) Map.empty
+    .| zipWithIndexC
+    .| C.iterM (\((State (term, _, score) (_, bestScore)), idx) -> putStrLn $ formatLabeled
+         [ ("#",     show idx)
+         , ("best",  show bestScore)
+         , ("score", show score)
+         , ("size",  show $ countTerm term)
+         ])
+    .| C.map (\(State latest _, _) -> latest)
+    .| C.foldl (\acc (_, result, score) -> Map.alter (Just . (+1) . fromMaybe (0 :: Int)) (score, result) acc) Map.empty
   traverse_ print . map (\((a, b), c) -> (a, b, c)) $ Map.toList summary
   where
   zero = encodeChurchNumber 0
   one = encodeChurchNumber 1
   two = encodeChurchNumber 2
 
-  go :: (forall a. IO a -> IO a) -> ConduitT i (Term, Result, Int) IO ()
+  formatLabeled :: [(String, String)] -> String
+  formatLabeled = intercalate ", " . map (\(k, v) -> k <> ": " <> v)
+
+  go :: (forall a. IO a -> IO a) -> ConduitT i State IO ()
   go restoreMask = do
     (m, result, score) <- liftIO $ restoreMask $ do
       m <- Q.generate $ genTerm Set.empty
       let !result = runTerm m
           !score = resultScore result
       pure $! (m, result, score)
-    C.yield (m, result, score)
+    C.yield $ State (m, result, score) (m, score)
     loop m score
     where
-    loop :: Term -> Int -> ConduitT i (Term, Result, Int) IO ()
+    loop :: Term -> Int -> ConduitT i State IO ()
     loop bestTerm bestScore = do
       (m, result, score) <- liftIO $ restoreMask $ do
         m <- liftIO $ Q.generate $ genModifiedTerm Set.empty bestTerm
         let !result = runTerm m
             !score = resultScore result
         pure $! (m, result, score)
-      C.yield (m, result, score)
+      C.yield $ State (m, result, score) (bestTerm, bestScore)
       if score >= bestScore
         then loop m score
         else loop bestTerm score
