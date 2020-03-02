@@ -1,19 +1,22 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 module Term where
 
 import Control.DeepSeq (NFData)
-import Control.Lens (Index, IxValue, Ixed, Traversal', ix)
+import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix)
 import Data.List (delete, union)
 import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.Set (Set)
 import GHC.Generics (Generic)
 import Test.QuickCheck (Gen)
 
 import qualified Data.List.NonEmpty as NE
+import qualified Data.Set as Set
 import qualified Test.QuickCheck as Q
 
 type Var = Char
@@ -27,7 +30,7 @@ data TermRaw
 -- | A lambda termRaw and its metadata.
 data Term = Term
   { termRaw :: TermRaw
-  , freeVars :: [Var]
+  , freeVars :: [Var] -- TODO Set Var
   , countTerm :: Int
   }
   deriving (Eq, Generic, NFData, Show)
@@ -74,6 +77,13 @@ pattern App m n <- Term { termRaw = AppRaw m n }
 
 {-# COMPLETE Var, Abs, App #-}
 
+-- | A term with additional info about its enclosing term.
+data BoundTerm = BoundTerm
+  { boundTerm :: Term
+  , boundVars :: Set Var
+  }
+  deriving (Eq, Generic, NFData, Show)
+
 -- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
 -- traversed in depth-first, pre-order.
 --
@@ -111,17 +121,24 @@ index i m = at i (toList m)
 -- TODO make sure that this instance is consistent with 'linear'; or rather, implement it with this?
 instance Ixed Term where
   ix :: Int -> Traversal' Term Term
-  ix i f m
-    | i == 0 = f m
+  ix i f = ixBound i (f . boundTerm)
+
+type instance Index Term = Int
+type instance IxValue Term = Term
+
+-- | 'ix @Term' with an additional info. (See 'BoundTerm')
+ixBound :: Int -> Traversal Term Term BoundTerm Term
+ixBound = loop Set.empty
+  where
+  loop :: Applicative f => Set Var -> Int -> (BoundTerm -> f Term) -> Term -> f Term
+  loop bound i f m
+    | i == 0 = f (BoundTerm{boundTerm = m, boundVars = bound})
     | i < 0 = pure m
     | i >= countTerm m = pure m -- for performance only; avoids unnecessary traversal especially on recursion
     | otherwise = case m of
         Var _ -> pure m
-        Abs x n -> Abs x <$> ix (i-1) f n
-        App n1 n2 -> App <$> ix (i-1) f n1 <*> ix (i-1-(countTerm n1)) f n2
-
-type instance Index Term = Int
-type instance IxValue Term = Term
+        Abs x n -> Abs x <$> loop (Set.insert x bound) (i-1) f n
+        App n1 n2 -> App <$> loop bound (i-1) f n1 <*> loop bound (i-1-(countTerm n1)) f n2
 
 -- | Generates a 'Term' with a specified set of free variables.
 --
@@ -159,7 +176,4 @@ genTerm fv = case fv of
 genModifiedTerm :: Term -> Gen Term
 genModifiedTerm m = do
   i <- Q.choose (0, countTerm m - 1)
-  flip (ix i) m $ \n -> do
-    -- TODO access variables bound by abstractions enclosing this sub-term, not its free vars
-    let vars = freeVars n
-    genTerm vars
+  flip (ixBound i) m $ \BoundTerm{boundVars} -> genTerm $ Set.toList boundVars
