@@ -147,7 +147,7 @@ main = do
          UserInterrupt -> mempty
          _ -> liftIO $ throwIO e
          )
-    .| C.iterM (\(_, result, _) -> print result)
+    .| C.iterM (\(term, _, score) -> putStrLn $ "size: " <> show (countTerm term) <> ", score: " <> show score)
     .| C.foldl (\acc (_, result, score) -> Map.alter (Just . (+1) . fromMaybe 0) (score, result) acc) Map.empty
   traverse_ print . map (\((a, b), c) -> (a, b, c)) $ Map.toList summary
   where
