@@ -12,7 +12,8 @@ import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Set (Set)
 import GHC.Generics (Generic)
-import Test.QuickCheck (Gen)
+import Genetic (ChooseIxed, chooseIx, genModified)
+import Test.QuickCheck (Arbitrary, Gen)
 
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
@@ -33,6 +34,15 @@ data Term = Term
   , countTerm :: Int
   }
   deriving (Eq, Generic, NFData, Show)
+
+-- TODO make sure that @instance At Term@ does *not* form a "reasonable instance"
+-- TODO make sure that this instance is consistent with 'linear'; or rather, implement it with this?
+instance Ixed Term where
+  ix :: Int -> Traversal' Term Term
+  ix i f = ixBound i (f . boundTerm)
+
+type instance Index Term = Int
+type instance IxValue Term = Term
 
 -- | A smart constructor which matches 'termRaw' and handles other fields transparently.
 pattern Var :: Var -> Term
@@ -116,15 +126,6 @@ index i m = at i (toList m)
     | (x:_) <- drop j xs = Just x
     | otherwise = Nothing
 
--- TODO make sure that @instance At Term@ does *not* form a "reasonable instance"
--- TODO make sure that this instance is consistent with 'linear'; or rather, implement it with this?
-instance Ixed Term where
-  ix :: Int -> Traversal' Term Term
-  ix i f = ixBound i (f . boundTerm)
-
-type instance Index Term = Int
-type instance IxValue Term = Term
-
 -- | 'ix @Term' with an additional info. (See 'BoundTerm')
 ixBound :: Int -> Traversal Term Term BoundTerm Term
 ixBound = loop Set.empty
@@ -177,3 +178,21 @@ genModifiedTerm :: Set Var -> Term -> Gen Term
 genModifiedTerm fv m = do
   i <- Q.choose (0, countTerm m - 1)
   flip (ixBound i) m $ \BoundTerm{boundVars} -> genTerm $ fv <> boundVars
+
+-- | A closed lambda term. This assumption allows more type instances to be defined.
+newtype ClosedTerm = ClosedTerm { unClosedTerm :: Term }
+  deriving (Eq, Generic, NFData, Show)
+
+instance Arbitrary ClosedTerm where
+  arbitrary = ClosedTerm <$> genTerm Set.empty
+
+instance Ixed ClosedTerm where
+  ix :: Int -> Traversal' ClosedTerm Term
+  ix i f = fmap ClosedTerm . ix i f . unClosedTerm
+
+instance ChooseIxed ClosedTerm where
+  chooseIx (ClosedTerm m) = Q.choose (0, countTerm m - 1)
+  genModified = fmap ClosedTerm . genModifiedTerm Set.empty . unClosedTerm
+
+type instance Index ClosedTerm = Int
+type instance IxValue ClosedTerm = Term
