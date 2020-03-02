@@ -130,24 +130,29 @@ genTerm fv = case fv of
   -- 2X + 1 terms
   genApp = App <$> genTerm fv <*> genTerm fv
 
-genFoo :: Q.Gen Term
-genFoo = Abs 'f' . Abs 'x' <$> genTerm ['f', 'x']
+genChurchNumber :: Q.Gen Term
+genChurchNumber = Abs 'f' . Abs 'x' <$> genTerm ['f', 'x']
+
+encodeChurchNumber :: Int -> Term
+encodeChurchNumber n
+  | n < 0 = error "encodeNat: negative number"
+  | otherwise = Abs 'f' $ Abs 'x' $ iterate (App (Var 'f')) (Var 'x') !! n
 
 main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
   print =<< mask (\r -> loop r mempty)
   where
+  one = encodeChurchNumber 1
   loop :: (forall a. IO a -> IO a) -> Map (Maybe Int) Int -> IO (Map (Maybe Int) Int)
   loop restoreMask acc = do
-    let calcNext = do
-          term <- Q.generate genFoo
-          let result = interpretChurchNumber term
-          case result of
-            Just i -> print i
-            Nothing -> putChar '.'
-          pure $! Map.alter (Just . (+1) . fromMaybe 0) result acc
-    result <- try $ restoreMask calcNext
+    result <- try $ restoreMask $ do
+      m <- Q.generate $ genTerm []
+      let result = interpretChurchNumber (App (App m one) one)
+      case result of
+        Just i -> print i
+        Nothing -> putChar '.'
+      pure $! Map.alter (Just . (+1) . fromMaybe 0) result acc
     case result of
       Right next -> loop restoreMask next
       Left UserInterrupt -> pure acc
