@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 module Main where
 
 import Control.Exception (AsyncException(UserInterrupt), mask, throwIO, try)
@@ -112,16 +113,37 @@ encodeChurchNumber n
   | otherwise = Abs 'f' $ Abs 'x' $ iterate (App (Var 'f')) (Var 'x') !! n
 
 data Result = Result
-  { r1p1 :: Maybe Int
+  { r0p0 :: Maybe Int
+  , r0p1 :: Maybe Int
+  , r1p0 :: Maybe Int
+  , r1p1 :: Maybe Int
   , r1p2 :: Maybe Int
+  , r2p0 :: Maybe Int
   , r2p1 :: Maybe Int
+  , r2p2 :: Maybe Int
   }
   deriving (Eq, Ord, Show)
 
+resultScore :: Result -> Int
+resultScore Result{..} = sum $ map btoi
+  [ r0p0 == Just 0
+  , r0p1 == Just 1
+  , r1p0 == Just 1
+  , r1p1 == Just 2
+  , r1p2 == Just 3
+  , r2p0 == Just 2
+  , r2p1 == Just 3
+  , r2p2 == Just 4
+  ]
+  where
+  btoi True  = 1
+  btoi False = 0
+
 main :: IO ()
 main = do
-  traverse_ print . Map.toList =<< mask (\r -> loop r mempty)
+  traverse_ (\(r, n) -> print (r, resultScore r, n)) . Map.toList =<< mask (\r -> loop r mempty)
   where
+  zero = encodeChurchNumber 0
   one = encodeChurchNumber 1
   two = encodeChurchNumber 2
   loop :: (forall a. IO a -> IO a) -> Map Result Int -> IO (Map Result Int)
@@ -129,9 +151,14 @@ main = do
     result <- try $ restoreMask $ do
       m <- Q.generate $ genTerm Set.empty
       let result = Result
-            { r1p1 = interpretChurchNumber (App (App m one) one)
-            , r1p2 = interpretChurchNumber (App (App m one) two)
-            , r2p1 = interpretChurchNumber (App (App m two) one)
+            { r0p0 = interpretChurchNumber (App (App m zero) zero)
+            , r0p1 = interpretChurchNumber (App (App m zero) one)
+            , r1p0 = interpretChurchNumber (App (App m one ) zero)
+            , r1p1 = interpretChurchNumber (App (App m one ) one)
+            , r1p2 = interpretChurchNumber (App (App m one ) two)
+            , r2p0 = interpretChurchNumber (App (App m two ) zero)
+            , r2p1 = interpretChurchNumber (App (App m two ) one)
+            , r2p2 = interpretChurchNumber (App (App m two ) two)
             }
       print result
       pure $! Map.alter (Just . (+1) . fromMaybe 0) result acc
