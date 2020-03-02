@@ -5,10 +5,10 @@ module Main where
 
 import Control.Exception (AsyncException(UserInterrupt), mask, throwIO, try)
 import Data.Conduit ((.|), ConduitT, runConduitPure)
+import Data.Foldable (traverse_)
 import Data.Map.Strict (Map)
 import Data.List (find)
 import Data.Maybe (fromMaybe)
-import System.IO (BufferMode(NoBuffering), hSetBuffering, stdout)
 import Term
   ( Term
   , Var
@@ -138,20 +138,29 @@ encodeChurchNumber n
   | n < 0 = error "encodeNat: negative number"
   | otherwise = Abs 'f' $ Abs 'x' $ iterate (App (Var 'f')) (Var 'x') !! n
 
+data Result = Result
+  { r1p1 :: Maybe Int
+  , r1p2 :: Maybe Int
+  , r2p1 :: Maybe Int
+  }
+  deriving (Eq, Ord, Show)
+
 main :: IO ()
 main = do
-  hSetBuffering stdout NoBuffering
-  print =<< mask (\r -> loop r mempty)
+  traverse_ print . Map.toList =<< mask (\r -> loop r mempty)
   where
   one = encodeChurchNumber 1
-  loop :: (forall a. IO a -> IO a) -> Map (Maybe Int) Int -> IO (Map (Maybe Int) Int)
+  two = encodeChurchNumber 2
+  loop :: (forall a. IO a -> IO a) -> Map Result Int -> IO (Map Result Int)
   loop restoreMask acc = do
     result <- try $ restoreMask $ do
       m <- Q.generate $ genTerm []
-      let result = interpretChurchNumber (App (App m one) one)
-      case result of
-        Just i -> print i
-        Nothing -> putChar '.'
+      let result = Result
+            { r1p1 = interpretChurchNumber (App (App m one) one)
+            , r1p2 = interpretChurchNumber (App (App m one) two)
+            , r2p1 = interpretChurchNumber (App (App m two) one)
+            }
+      print result
       pure $! Map.alter (Just . (+1) . fromMaybe 0) result acc
     case result of
       Right next -> loop restoreMask next
