@@ -162,7 +162,7 @@ resultScore Result{..} = sum $ map btoi
 
 data Event
   = RunEvent (Term, Result, Double, Seconds)
-  | GenEvent (Double, Double)
+  | GenEvent (Double, Double, Double)
 
 main :: IO ()
 main = do
@@ -196,9 +196,10 @@ main = do
             ]
           C.yield evt
           loop (runIdx + 1) genIdx
-        GenEvent (avg, szavg) -> do
+        GenEvent (best, avg, szavg) -> do
           liftIO $ putStrLn $ formatLabeled
             [ ("generation", show genIdx)
+            , ("score best", printf "%.03f" best)
             , ("score avg",  printf "%.03f" avg)
             , ("size avg",   printf "%.03f" szavg)
             ]
@@ -236,7 +237,8 @@ main = do
 
     mkGenEvent :: [(ClosedTerm, Double)] -> Event
     mkGenEvent popu = GenEvent
-      ( maybe 0 average $ nonEmpty $ map (\(_, score) -> score) popu
+      ( maybe 0 maximum $ nonEmpty $ map (\(_, score) -> score) popu
+      , maybe 0 average $ nonEmpty $ map (\(_, score) -> score) popu
       , maybe 0 average $ nonEmpty $ map (\(m, _) -> realToFrac $ countTerm $ unClosedTerm m) popu
       )
 
