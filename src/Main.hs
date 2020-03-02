@@ -219,7 +219,13 @@ main = do
     loop prevPopu = do
       terms <- liftIO $ Q.generate $ newGeneration $ map (\(m, score) -> Individual m (max 1 $ round (score * 1000))) prevPopu
       nextPopu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
-      let mergedPopu = take numPopulation $ sortOn (\(_, score) -> Down score) (nextPopu <> prevPopu)
+      mergedPopu <- liftIO $ Q.generate $ do
+        let bothPopu = sortOn (\(_, score) -> Down score) (nextPopu <> prevPopu)
+            numSelected = numPopulation * 9 `div` 10
+            numRandom = numPopulation - numSelected
+            (selectedPopu, badPopu) = splitAt numSelected bothPopu
+        randomPopu <- replicateM numRandom $ Q.elements badPopu
+        pure $ selectedPopu <> randomPopu
       C.yield $ mkGenEvent mergedPopu
       loop mergedPopu
 
