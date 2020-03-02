@@ -1,9 +1,13 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 module Term where
 
 import Control.DeepSeq (NFData)
+import Control.Lens (Index, IxValue, Ixed, Traversal', ix)
 import Data.List (delete, union)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import GHC.Generics (Generic)
@@ -76,6 +80,8 @@ countTerm = size
 -- traversed in depth-first, pre-order.
 --
 -- The first element is always @m@.
+--
+-- TODO make sure that @length (linear m) == countTerm m@
 linear :: Term -> NonEmpty Term
 linear m = m :| case m of
   Var _ -> []
@@ -102,3 +108,19 @@ index i m = at i (toList m)
     | j < 0 = Nothing
     | (x:_) <- drop j xs = Just x
     | otherwise = Nothing
+
+-- TODO make sure that @instance At Term@ does *not* form a "reasonable instance"
+-- TODO make sure that this instance is consistent with 'linear'; or rather, implement it with this?
+instance Ixed Term where
+  ix :: Int -> Traversal' Term Term
+  ix i f m
+    | i == 0 = f m
+    | i < 0 = pure m
+    | i >= countTerm m = pure m -- for performance only; avoids unnecessary traversal especially on recursion
+    | otherwise = case m of
+        Var _ -> pure m
+        Abs x n -> Abs x <$> ix (i-1) f n
+        App n1 n2 -> App <$> ix (i-1) f n1 <*> ix (i-1-(countTerm n1)) f n2
+
+type instance Index Term = Int
+type instance IxValue Term = Term
