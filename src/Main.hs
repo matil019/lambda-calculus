@@ -11,6 +11,7 @@ import Data.Foldable (traverse_)
 import Data.List (find, intercalate)
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
+import System.Time.Extra (Seconds, duration)
 import Term
   ( Term
   , Var
@@ -22,6 +23,7 @@ import Term
   , pattern App
   , pattern Var
   )
+import Text.Printf (printf)
 
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
@@ -141,7 +143,7 @@ resultScore Result{..} = sum $ map btoi
   btoi False = 0
 
 -- latest and best
-data State = State (Term, Result, Int) (Term, Int)
+data State = State (Term, Result, Int, Seconds) (Term, Int)
 
 main :: IO ()
 main = do
@@ -151,14 +153,15 @@ main = do
          _ -> liftIO $ throwIO e
          )
     .| zipWithIndexC
-    .| C.iterM (\((State (term, _, score) (_, bestScore)), idx) -> putStrLn $ formatLabeled
+    .| C.iterM (\((State (term, _, score, time) (_, bestScore)), idx) -> putStrLn $ formatLabeled
          [ ("#",     show idx)
          , ("best",  show bestScore)
          , ("score", show score)
          , ("size",  show $ countTerm term)
+         , ("time",  printf "%.4f" time)
          ])
-    .| C.map (\(State latest _, _) -> latest)
-    .| C.foldl (\acc (_, result, score) -> Map.alter (Just . (+1) . fromMaybe (0 :: Int)) (score, result) acc) Map.empty
+    .| C.map (\(State (_, result, score, _) _, _) -> (result, score))
+    .| C.foldl (\acc (result, score) -> Map.alter (Just . (+1) . fromMaybe (0 :: Int)) (score, result) acc) Map.empty
   traverse_ print . map (\((a, b), c) -> (a, b, c)) $ Map.toList summary
   where
   zero = encodeChurchNumber 0
@@ -170,22 +173,22 @@ main = do
 
   go :: (forall a. IO a -> IO a) -> ConduitT i State IO ()
   go restoreMask = do
-    (m, result, score) <- liftIO $ restoreMask $ do
+    (time, (m, result, score)) <- liftIO $ duration $ restoreMask $ do
       m <- Q.generate $ genTerm Set.empty
       let !result = runTerm m
           !score = resultScore result
       pure $! (m, result, score)
-    C.yield $ State (m, result, score) (m, score)
+    C.yield $ State (m, result, score, time) (m, score)
     loop m score
     where
     loop :: Term -> Int -> ConduitT i State IO ()
     loop bestTerm bestScore = do
-      (m, result, score) <- liftIO $ restoreMask $ do
+      (time, (m, result, score)) <- liftIO $ duration $ restoreMask $ do
         m <- liftIO $ Q.generate $ genModifiedTerm Set.empty bestTerm
         let !result = runTerm m
             !score = resultScore result
         pure $! (m, result, score)
-      C.yield $ State (m, result, score) (bestTerm, bestScore)
+      C.yield $ State (m, result, score, time) (bestTerm, bestScore)
       if score >= bestScore
         then loop m score
         else loop bestTerm bestScore
