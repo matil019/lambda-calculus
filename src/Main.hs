@@ -209,7 +209,7 @@ main = do
   -- that it can be handled outside.
   geneAlgo :: ConduitT i Event IO r
   geneAlgo = do
-    terms <- liftIO $ Q.generate $ replicateM 100 arbitrary
+    terms <- liftIO $ Q.generate $ replicateM numPopulation arbitrary
     -- POPUlation
     popu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
     C.yield $ GenEvent $ maybe 0 average $ nonEmpty $ map (\Individual{score} -> realToFrac score) popu
@@ -218,7 +218,7 @@ main = do
     loop prevPopu = do
       terms <- liftIO $ Q.generate $ newGeneration prevPopu
       nextPopu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
-      let mergedPopu = take 100 $ sortOn (\Individual{score} -> Down score) (prevPopu <> nextPopu)
+      let mergedPopu = take numPopulation $ sortOn (\Individual{score} -> Down score) (prevPopu <> nextPopu)
       C.yield $ GenEvent $ maybe 0 average $ nonEmpty $ map (\Individual{score} -> realToFrac score) mergedPopu
       loop mergedPopu
 
