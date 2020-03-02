@@ -1,34 +1,42 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
 import Control.Exception (AsyncException(UserInterrupt), mask, throwIO)
+import Control.Monad (replicateM)
 import Control.Monad.IO.Class (liftIO)
 import Data.Conduit ((.|), ConduitT, runConduit, runConduitPure)
 import Data.Foldable (traverse_)
-import Data.List (find, intercalate)
+import Data.Ord (Down(Down))
+import Data.List (find, intercalate, sortOn)
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
+import Genetic (Individual(Individual), newGeneration)
 import System.Time.Extra (Seconds, duration)
 import Term
-  ( Term
+  ( ClosedTerm
+  , Term
   , Var
   , countTerm
   , freeVars
-  , genModifiedTerm
   , genTerm
+  , unClosedTerm
   , pattern Abs
   , pattern App
   , pattern Var
   )
+import Test.QuickCheck (arbitrary)
 import Text.Printf (printf)
 
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import qualified Genetic
 import qualified Test.QuickCheck as Q
 
 -- borrowed from "extra"
@@ -142,25 +150,21 @@ resultScore Result{..} = sum $ map btoi
   btoi True  = 1
   btoi False = 0
 
--- latest and best
-data State = State (Term, Result, Int, Seconds) (Term, Int)
-
 main :: IO ()
 main = do
-  summary <- mask $ \r -> runConduit
-     $ C.catchC (go r) (\e -> case e of
+  summary <- mask $ \restoreMask -> runConduit
+     $ C.catchC (geneAlgo .| C.mapM (\a -> restoreMask $ pure a)) (\e -> case e of
          UserInterrupt -> mempty
          _ -> liftIO $ throwIO e
          )
     .| zipWithIndexC
-    .| C.iterM (\((State (term, _, score, time) (_, bestScore)), idx) -> putStrLn $ formatLabeled
+    .| C.iterM (\((term, _, score, time), idx) -> putStrLn $ formatLabeled
          [ ("#",     show idx)
-         , ("best",  show bestScore)
          , ("score", show score)
          , ("size",  show $ countTerm term)
          , ("time",  printf "%.4f" time)
          ])
-    .| C.map (\(State (_, result, score, _) _, _) -> (result, score))
+    .| C.map (\((_, result, score, _), _) -> (result, score))
     .| C.foldl (\acc (result, score) -> Map.alter (Just . (+1) . fromMaybe (0 :: Int)) (score, result) acc) Map.empty
   traverse_ print . map (\((a, b), c) -> (a, b, c)) $ Map.toList summary
   where
@@ -171,27 +175,29 @@ main = do
   formatLabeled :: [(String, String)] -> String
   formatLabeled = intercalate ", " . map (\(k, v) -> k <> ": " <> v)
 
-  go :: (forall a. IO a -> IO a) -> ConduitT i State IO ()
-  go restoreMask = do
-    (time, (m, result, score)) <- liftIO $ duration $ restoreMask $ do
-      m <- Q.generate $ genTerm Set.empty
-      let !result = runTerm m
-          !score = resultScore result
-      pure $! (m, result, score)
-    C.yield $ State (m, result, score, time) (m, score)
-    loop m score
+  -- Here, ConduitT is used like the Writer monad; the procedure is described with
+  -- monadic binding, whereas the progress is written (by 'yield') to downstream so
+  -- that it can be handled outside.
+  geneAlgo :: ConduitT i (Term, Result, Int, Seconds) IO r
+  geneAlgo = do
+    terms <- liftIO $ Q.generate $ replicateM 100 arbitrary
+    -- POPUlation
+    popu <- traverse runMeasureYield terms
+    loop popu
     where
-    loop :: Term -> Int -> ConduitT i State IO ()
-    loop bestTerm bestScore = do
-      (time, (m, result, score)) <- liftIO $ duration $ restoreMask $ do
-        m <- liftIO $ Q.generate $ genModifiedTerm Set.empty bestTerm
-        let !result = runTerm m
+    loop prevPopu = do
+      terms <- liftIO $ Q.generate $ newGeneration prevPopu
+      nextPopu <- traverse runMeasureYield terms
+      loop $ take 100 $ sortOn (\Individual{score} -> Down score) (prevPopu <> nextPopu)
+
+    runMeasureYield :: ClosedTerm -> ConduitT i (Term, Result, Int, Seconds) IO (Individual ClosedTerm)
+    runMeasureYield m = do
+      (time, (result, score)) <- liftIO $ duration $ do
+        let !result = runTerm $ unClosedTerm m
             !score = resultScore result
-        pure $! (m, result, score)
-      C.yield $ State (m, result, score, time) (bestTerm, bestScore)
-      if score >= bestScore
-        then loop m score
-        else loop bestTerm bestScore
+        pure $! (result, score)
+      C.yield (unClosedTerm m, result, score, time)
+      pure $ Individual m score
 
   runTerm :: Term -> Result
   runTerm m = Result
