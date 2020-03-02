@@ -152,3 +152,14 @@ genTerm fv = case fv of
     Abs fresh <$> genTerm (fresh:fv)
   -- 2X + 1 terms
   genApp = App <$> genTerm fv <*> genTerm fv
+
+-- | Generates a modified 'Term'.
+--
+-- Picks a random sub-term and replaces it with a fresh one.
+genModifiedTerm :: Term -> Gen Term
+genModifiedTerm m = do
+  i <- Q.choose (0, countTerm m - 1)
+  flip (ix i) m $ \n -> do
+    -- TODO access variables bound by abstractions enclosing this sub-term, not its free vars
+    let vars = freeVars n
+    genTerm vars
