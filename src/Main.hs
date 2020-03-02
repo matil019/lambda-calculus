@@ -157,7 +157,7 @@ resultScore Result{..} = sum $ map btoi
 
 data Event
   = RunEvent (Term, Result, Int, Seconds)
-  | GenEvent Double
+  | GenEvent (Double, Double)
 
 main :: IO ()
 main = do
@@ -191,10 +191,11 @@ main = do
             ]
           C.yield evt
           loop (runIdx + 1) genIdx
-        GenEvent pop -> do
+        GenEvent (avg, szavg) -> do
           liftIO $ putStrLn $ formatLabeled
             [ ("generation", show genIdx)
-            , ("average", show pop)
+            , ("average", show avg)
+            , ("size avg", show szavg)
             ]
           C.yield evt
           loop runIdx (genIdx + 1)
@@ -210,14 +211,20 @@ main = do
     terms <- liftIO $ Q.generate $ replicateM numPopulation arbitrary
     -- POPUlation
     popu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
-    C.yield $ GenEvent $ maybe 0 average $ nonEmpty $ map (\Individual{score} -> realToFrac score) popu
+    C.yield $ GenEvent
+      ( maybe 0 average $ nonEmpty $ map (\Individual{score} -> realToFrac score) popu
+      , maybe 0 average $ nonEmpty $ map (\Individual{individual} -> realToFrac $ countTerm $ unClosedTerm individual) popu
+      )
     loop popu
     where
     loop prevPopu = do
       terms <- liftIO $ Q.generate $ newGeneration prevPopu
       nextPopu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
       let mergedPopu = take numPopulation $ sortOn (\Individual{score} -> Down score) (nextPopu <> prevPopu)
-      C.yield $ GenEvent $ maybe 0 average $ nonEmpty $ map (\Individual{score} -> realToFrac score) mergedPopu
+      C.yield $ GenEvent
+        ( maybe 0 average $ nonEmpty $ map (\Individual{score} -> realToFrac score) mergedPopu
+        , maybe 0 average $ nonEmpty $ map (\Individual{individual} -> realToFrac $ countTerm $ unClosedTerm individual) mergedPopu
+        )
       loop mergedPopu
 
     numPopulation = 1000
