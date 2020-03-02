@@ -100,30 +100,38 @@ interpretChurchNumber = \m ->
   go (App (Var '+') n) = fmap (1+) $ go n
   go _ = Nothing
 
-genFoo :: Q.Gen Term
-genFoo =
-  fmap (\m -> Abs 'f' (Abs 'x' m)) $ genBound ['f', 'x']
-  where
-  -- assume that the probability of picking 'genVar' is @p@
-  -- and the other two are @(1 - p) / 2@, resp.
-  -- then, to have the expected value of the number of terms to be @X@,
-  -- > p = (X + 2) / 3X
-  genBound :: [Var] -> Q.Gen Term
-  genBound bound = do
+-- | Generate a 'Term' with a specified set of free variables.
+--
+-- The size parameter of 'Gen' is used as an average of a number of sub-terms
+-- in a term. Note that there is no upper limit of a size of a generated term;
+-- although rare, a huge term may be generated.
+--
+-- If the list is empty, @genTerm@ always generates a closed term i.e. an 'Abs'.
+genTerm :: [Var] -> Q.Gen Term
+genTerm fv = case fv of
+  [] -> Q.scale (subtract 1) genAbs
+  _ -> do
+    -- assume that the probability of picking 'genVar' is @p@
+    -- and the other two are @(1 - p) / 2@, resp.
+    -- then, to have the expected value of the number of terms to be @X@,
+    -- > p = (X + 2) / 3X
     size <- max 1 <$> Q.getSize
     -- @(p / 100)%@: the probability of picking 'genVar'
     let p = 10000 * (size + 2) `div` (3 * size)
         q = (10000 - p) `div` 2
     Q.frequency [(p, genVar), (q, genAbs), (q, genApp)]
-    where
-    -- 1 term
-    genVar = Var <$> Q.elements bound
-    -- X + 1 terms
-    genAbs = do
-      fresh <- Q.elements ['a'..'z']
-      Abs fresh <$> genBound (fresh:bound)
-    -- 2X + 1 terms
-    genApp = App <$> genBound bound <*> genBound bound
+  where
+  -- 1 term
+  genVar = Var <$> Q.elements fv
+  -- X + 1 terms
+  genAbs = do
+    fresh <- Q.elements ['a'..'z']
+    Abs fresh <$> genTerm (fresh:fv)
+  -- 2X + 1 terms
+  genApp = App <$> genTerm fv <*> genTerm fv
+
+genFoo :: Q.Gen Term
+genFoo = Abs 'f' . Abs 'x' <$> genTerm ['f', 'x']
 
 main :: IO ()
 main = do
