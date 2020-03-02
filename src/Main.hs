@@ -9,6 +9,7 @@ import Data.Foldable (traverse_)
 import Data.Map.Strict (Map)
 import Data.List (find)
 import Data.Maybe (fromMaybe)
+import Data.Set (Set)
 import Term
   ( Term
   , Var
@@ -23,6 +24,7 @@ import Term
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Test.QuickCheck as Q
 
 -- borrowed from "extra"
@@ -33,8 +35,8 @@ convertAlpha :: Var -> Term -> Term
 convertAlpha x (Abs y m) = Abs x $! substitute y (Var x) m
 convertAlpha _ m = m
 
-newFreeVar :: [Var] -> Var
-newFreeVar except = case find (`notElem` except) ['a'..'z'] of
+newFreeVar :: Set Var -> Var
+newFreeVar except = case find (`Set.notMember` except) ['a'..'z'] of
   Just ok -> ok
   Nothing -> error "newFreeVar: no vars available"
 
@@ -50,7 +52,7 @@ substitute x n (Abs y m)
   | x == y = Abs y m
   | x /= y && y `notElem` freeVars n = Abs y $! substitute x n m
   -- TODO not needed to recurse substitute again, but for that it needs a distinct @Abs@ type
-  | otherwise = substitute x n $! convertAlpha (newFreeVar (x : freeVars n)) (Abs y m)
+  | otherwise = substitute x n $! convertAlpha (newFreeVar (Set.insert x (freeVars n))) (Abs y m)
 
 -- | Performs beta-reduction.
 --
@@ -102,7 +104,7 @@ interpretChurchNumber = \m ->
   go _ = Nothing
 
 genChurchNumber :: Q.Gen Term
-genChurchNumber = Abs 'f' . Abs 'x' <$> genTerm ['f', 'x']
+genChurchNumber = Abs 'f' . Abs 'x' <$> genTerm (Set.fromList ['f', 'x'])
 
 encodeChurchNumber :: Int -> Term
 encodeChurchNumber n
@@ -125,7 +127,7 @@ main = do
   loop :: (forall a. IO a -> IO a) -> Map Result Int -> IO (Map Result Int)
   loop restoreMask acc = do
     result <- try $ restoreMask $ do
-      m <- Q.generate $ genTerm []
+      m <- Q.generate $ genTerm Set.empty
       let result = Result
             { r1p1 = interpretChurchNumber (App (App m one) one)
             , r1p2 = interpretChurchNumber (App (App m one) two)

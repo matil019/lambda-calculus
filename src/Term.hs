@@ -9,7 +9,6 @@ module Term where
 
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix)
-import Data.List (delete, union)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Set (Set)
 import GHC.Generics (Generic)
@@ -30,7 +29,7 @@ data TermRaw
 -- | A lambda termRaw and its metadata.
 data Term = Term
   { termRaw :: TermRaw
-  , freeVars :: [Var] -- TODO Set Var
+  , freeVars :: Set Var
   , countTerm :: Int
   }
   deriving (Eq, Generic, NFData, Show)
@@ -41,7 +40,7 @@ pattern Var x <- Term { termRaw = VarRaw x }
   where
   Var x = Term
     { termRaw = VarRaw x
-    , freeVars = [x]
+    , freeVars = Set.singleton x
     , countTerm = 1
     }
 
@@ -53,7 +52,7 @@ pattern Abs x m <- Term { termRaw = AbsRaw x m }
     { termRaw = AbsRaw x m
     , freeVars =
         let Term{freeVars=fm} = m
-        in delete x fm
+        in Set.delete x fm
     , countTerm =
         let Term{countTerm=sm} = m
         in 1 + sm
@@ -68,7 +67,7 @@ pattern App m n <- Term { termRaw = AppRaw m n }
     , freeVars =
         let Term{freeVars=fm} = m
             Term{freeVars=fn} = n
-        in union fm fn
+        in Set.union fm fn
     , countTerm =
         let Term{countTerm=sm} = m
             Term{countTerm=sn} = n
@@ -147,10 +146,11 @@ ixBound = loop Set.empty
 -- although rare, a huge term may be generated.
 --
 -- If the list is empty, @genTerm@ always generates a closed term i.e. an 'Abs'.
-genTerm :: [Var] -> Gen Term
-genTerm fv = case fv of
-  [] -> Q.scale (subtract 1) genAbs
-  _ -> do
+genTerm :: Set Var -> Gen Term
+genTerm fv =
+  if Set.null fv
+  then Q.scale (subtract 1) genAbs
+  else do
     -- assume that the probability of picking 'genVar' is @p@
     -- and the other two are @(1 - p) / 2@, resp.
     -- then, to have the expected value of the number of terms to be @X@,
@@ -162,11 +162,11 @@ genTerm fv = case fv of
     Q.frequency [(p, genVar), (q, genAbs), (q, genApp)]
   where
   -- 1 term
-  genVar = Var <$> Q.elements fv
+  genVar = Var <$> Q.elements (Set.toList fv)
   -- X + 1 terms
   genAbs = do
     fresh <- Q.elements ['a'..'z']
-    Abs fresh <$> genTerm (fresh:fv)
+    Abs fresh <$> genTerm (Set.insert fresh fv)
   -- 2X + 1 terms
   genApp = App <$> genTerm fv <*> genTerm fv
 
@@ -176,4 +176,4 @@ genTerm fv = case fv of
 genModifiedTerm :: Set Var -> Term -> Gen Term
 genModifiedTerm fv m = do
   i <- Q.choose (0, countTerm m - 1)
-  flip (ixBound i) m $ \BoundTerm{boundVars} -> genTerm $ Set.toList (fv <> boundVars)
+  flip (ixBound i) m $ \BoundTerm{boundVars} -> genTerm $ fv <> boundVars
