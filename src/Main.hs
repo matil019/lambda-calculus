@@ -187,7 +187,7 @@ main = do
           liftIO $ putStrLn $ formatLabeled
             [ ("#gen",  show genIdx)
             , ("#step", show runIdx)
-            , ("score", show score)
+            , ("score", printf "%.03f" score)
             , ("size",  show $ countTerm term)
             , ("time",  printf "%.4f" time)
             ]
@@ -196,8 +196,8 @@ main = do
         GenEvent (avg, szavg) -> do
           liftIO $ putStrLn $ formatLabeled
             [ ("generation", show genIdx)
-            , ("score avg", show avg)
-            , ("size avg", show szavg)
+            , ("score avg",  printf "%.03f" avg)
+            , ("size avg",   printf "%.03f" szavg)
             ]
           C.yield evt
           loop runIdx (genIdx + 1)
