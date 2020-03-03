@@ -12,4 +12,4 @@ You need `cabal`, the Haskell's build system to build and run the program. If yo
 
 Currently, the `main` function in [src/Main.hs](src/Main.hs) tries to find a "plus" function that adds two Church-encoded natural numbers.
 
-Run the program without command line and stop by the program with <kbd>Ctrl</kbd>+<kbd>C</kbd>.
+Run the program without command line and stop the program with <kbd>Ctrl</kbd>+<kbd>C</kbd>.
