@@ -8,7 +8,7 @@ version:             0.1.0.0
 -- synopsis:
 -- description:
 -- bug-reports:
-license:             BSD3
+license:             MIT
 license-file:        LICENSE
 author:              matil019
 maintainer:          yohashi1991@gmail.com
