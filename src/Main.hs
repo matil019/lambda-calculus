@@ -13,12 +13,12 @@ import Data.Conduit ((.|), ConduitT, runConduit, runConduitPure)
 import Data.Foldable (for_, traverse_)
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List (find, intercalate, sortOn)
+import Data.List.Extra (maximumOn)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
-import Data.Maybe (fromMaybe)
 import Data.Ord (Down(Down))
 import Data.Set (Set)
 import Genetic (Individual(Individual), newGeneration)
-import System.IO (BufferMode(LineBuffering), hPrint, hSetBuffering, stderr, stdout)
+import System.IO (BufferMode(LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
 import System.Time.Extra (Seconds, duration)
 import Term
   ( ClosedTerm
@@ -37,7 +37,7 @@ import Text.Printf (printf)
 
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
-import qualified Data.Map.Strict as Map
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 import qualified Test.QuickCheck as Q
 
@@ -134,29 +134,11 @@ encodeChurchNumber n
   | n < 0 = error "encodeNat: negative number"
   | otherwise = Abs "f" $ Abs "x" $ iterate (App (Var "f")) (Var "x") !! n
 
-data Result = Result
-  { r0p0 :: Maybe Int
-  , r0p1 :: Maybe Int
-  , r1p0 :: Maybe Int
-  , r1p1 :: Maybe Int
-  , r1p2 :: Maybe Int
-  , r2p0 :: Maybe Int
-  , r2p1 :: Maybe Int
-  , r2p2 :: Maybe Int
-  }
+data Result = Result [(Int, Int, Maybe Int)]
   deriving (Eq, Ord, Show)
 
 resultScore :: Result -> Int
-resultScore Result{..} = sum $ map btoi
-  [ r0p0 == Just 0
-  , r0p1 == Just 1
-  , r1p0 == Just 1
-  , r1p1 == Just 2
-  , r1p2 == Just 3
-  , r2p0 == Just 2
-  , r2p1 == Just 3
-  , r2p2 == Just 4
-  ]
+resultScore (Result xs) = sum $ map (\(a, b, r) -> btoi (Just (a + b) == r)) xs
   where
   btoi True  = 1
   btoi False = 0
@@ -170,16 +152,18 @@ main = do
   hSetBuffering stdout LineBuffering
   mask $ \restoreMask -> do
     exref <- newIORef Nothing
-    summary <- runConduit
+    best <- runConduit
        $ C.catchC (geneAlgo .| C.mapM (\a -> restoreMask $ pure a))
            (\e -> liftIO $ writeIORef exref (Just (e :: SomeException)))
       .| iterPrintEvent
       .| C.concatMap (\evt -> case evt of
-           RunEvent (_, result, score, _) -> Just (result, score)
-           GenEvent _ -> Nothing
+           RunEvent _ -> Nothing
+           GenEvent popu -> fmap (maximumOn (\(_, score) -> score) . NE.toList) $ nonEmpty popu
            )
-      .| C.foldl (\acc (result, score) -> Map.alter (Just . (+1) . fromMaybe (0 :: Int)) (score, result) acc) Map.empty
-    traverse_ (hPrint stderr) . map (\((a, b), c) -> (a, b, c)) $ Map.toList summary
+      .| C.last
+    for_ best $ \(m, score) -> do
+      hPutStrLn stderr $ "final best score: " <> show score
+      hPutStrLn stderr $ formatTerm $ unClosedTerm m
     traverse_ throwIO =<< readIORef exref
   where
   iterPrintEvent :: ConduitT Event Event IO ()
@@ -251,18 +235,17 @@ main = do
       C.yield (unClosedTerm m, result, score, time)
       pure (m, score)
 
-  zero = encodeChurchNumber 0
-  one  = encodeChurchNumber 1
-  two  = encodeChurchNumber 2
-
   runTerm :: Term -> Result
-  runTerm m = Result
-    { r0p0 = interpretChurchNumber (App (App m zero) zero)
-    , r0p1 = interpretChurchNumber (App (App m zero) one)
-    , r1p0 = interpretChurchNumber (App (App m one ) zero)
-    , r1p1 = interpretChurchNumber (App (App m one ) one)
-    , r1p2 = interpretChurchNumber (App (App m one ) two)
-    , r2p0 = interpretChurchNumber (App (App m two ) zero)
-    , r2p1 = interpretChurchNumber (App (App m two ) one)
-    , r2p2 = interpretChurchNumber (App (App m two ) two)
-    }
+  runTerm m = Result $ map (\(a, b) -> (a, b, f a b)) probs
+    where
+    f a b = interpretChurchNumber (App (App m (encodeChurchNumber a)) (encodeChurchNumber b))
+    probs =
+      [ (0, 0)
+      , (0, 1)
+      , (1, 0)
+      , (1, 1)
+      , (1, 2)
+      , (2, 0)
+      , (2, 1)
+      , (2, 2)
+      ]
