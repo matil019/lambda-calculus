@@ -225,7 +225,7 @@ main = do
       nextPopu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
       mergedPopu <- liftIO $ Q.generate $ do
         let bothPopu = sortOn (\(_, score) -> Down score) (nextPopu <> prevPopu)
-            numElite = numPopulation `div` 10
+            numElite = numPopulation * 2 `div` 5
             numRandom = numPopulation - numElite
             (elitePopu, badPopu) = splitAt numElite bothPopu
         randomPopu <-
