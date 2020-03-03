@@ -6,18 +6,19 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
-import Control.Exception (AsyncException(UserInterrupt), mask, throwIO)
+import Control.Exception (SomeException, mask, throwIO)
 import Control.Monad (replicateM)
 import Control.Monad.IO.Class (liftIO)
 import Data.Conduit ((.|), ConduitT, runConduit, runConduitPure)
 import Data.Foldable (for_, traverse_)
-import Data.Ord (Down(Down))
+import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List (find, intercalate, sortOn)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Maybe (fromMaybe)
+import Data.Ord (Down(Down))
 import Data.Set (Set)
 import Genetic (Individual(Individual), newGeneration)
-import System.IO (BufferMode(LineBuffering), hSetBuffering, stdout)
+import System.IO (BufferMode(LineBuffering), hPrint, hSetBuffering, stderr, stdout)
 import System.Time.Extra (Seconds, duration)
 import Term
   ( ClosedTerm
@@ -162,23 +163,24 @@ resultScore Result{..} = sum $ map btoi
 
 data Event
   = RunEvent (Term, Result, Double, Seconds)
-  | GenEvent (Double, Double, Double)
+  | GenEvent [(ClosedTerm, Double)]
 
 main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
-  summary <- mask $ \restoreMask -> runConduit
-     $ C.catchC (geneAlgo .| C.mapM (\a -> restoreMask $ pure a)) (\e -> case e of
-         UserInterrupt -> mempty
-         _ -> liftIO $ throwIO e
-         )
-    .| iterPrintEvent
-    .| C.concatMap (\evt -> case evt of
-         RunEvent (_, result, score, _) -> Just (result, score)
-         GenEvent _ -> Nothing
-         )
-    .| C.foldl (\acc (result, score) -> Map.alter (Just . (+1) . fromMaybe (0 :: Int)) (score, result) acc) Map.empty
-  traverse_ print . map (\((a, b), c) -> (a, b, c)) $ Map.toList summary
+  mask $ \restoreMask -> do
+    exref <- newIORef Nothing
+    summary <- runConduit
+       $ C.catchC (geneAlgo .| C.mapM (\a -> restoreMask $ pure a))
+           (\e -> liftIO $ writeIORef exref (Just (e :: SomeException)))
+      .| iterPrintEvent
+      .| C.concatMap (\evt -> case evt of
+           RunEvent (_, result, score, _) -> Just (result, score)
+           GenEvent _ -> Nothing
+           )
+      .| C.foldl (\acc (result, score) -> Map.alter (Just . (+1) . fromMaybe (0 :: Int)) (score, result) acc) Map.empty
+    traverse_ (hPrint stderr) . map (\((a, b), c) -> (a, b, c)) $ Map.toList summary
+    traverse_ throwIO =<< readIORef exref
   where
   iterPrintEvent :: ConduitT Event Event IO ()
   iterPrintEvent = loop (0 :: Int) (0 :: Int)
@@ -196,12 +198,13 @@ main = do
             ]
           C.yield evt
           loop (runIdx + 1) genIdx
-        GenEvent (best, avg, szavg) -> do
+        GenEvent popu -> do
+          let ne0 f = maybe 0 f . nonEmpty
           liftIO $ putStrLn $ formatLabeled
             [ ("generation", show genIdx)
-            , ("score best", printf "%.03f" best)
-            , ("score avg",  printf "%.03f" avg)
-            , ("size avg",   printf "%.03f" szavg)
+            , ("score best", printf "%.03f" $ ne0 maximum $ map (\(_, score) -> score) popu)
+            , ("score avg",  printf "%.03f" $ ne0 average $ map (\(_, score) -> score) popu)
+            , ("size avg",   printf "%.03f" $ ne0 average $ map (\(m, _) -> realToFrac $ countTerm $ unClosedTerm m) popu)
             ]
           C.yield evt
           loop runIdx (genIdx + 1)
@@ -217,7 +220,7 @@ main = do
     terms <- liftIO $ Q.generate $ replicateM numPopulation arbitrary
     -- POPUlation
     popu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
-    C.yield $ mkGenEvent popu
+    C.yield $ GenEvent popu
     loop popu
     where
     loop prevPopu = do
@@ -232,19 +235,12 @@ main = do
           let weighted = map (\x@(_, score) -> (scoreToWeight score, pure x)) badPopu
           in replicateM numRandom $ Q.frequency weighted
         pure $ elitePopu <> randomPopu
-      C.yield $ mkGenEvent mergedPopu
+      C.yield $ GenEvent mergedPopu
       loop mergedPopu
 
     scoreToWeight score = max 1 $ round $ 1000 * score
 
     numPopulation = 1000
-
-    mkGenEvent :: [(ClosedTerm, Double)] -> Event
-    mkGenEvent popu = GenEvent
-      ( maybe 0 maximum $ nonEmpty $ map (\(_, score) -> score) popu
-      , maybe 0 average $ nonEmpty $ map (\(_, score) -> score) popu
-      , maybe 0 average $ nonEmpty $ map (\(m, _) -> realToFrac $ countTerm $ unClosedTerm m) popu
-      )
 
     runMeasureYield :: ClosedTerm -> ConduitT i (Term, Result, Double, Seconds) IO (ClosedTerm, Double)
     runMeasureYield m = do
