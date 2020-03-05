@@ -6,7 +6,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-module Term where
+module LambdaCalculus.Term where
 
 #if !MIN_VERSION_base(4,11,0)
 import Data.Semigroup ((<>))
@@ -17,7 +17,7 @@ import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Set (Set)
 import GHC.Generics (Generic)
-import Genetic (ChooseIxed, chooseIx, genModified)
+import LambdaCalculus.Genetic (ChooseIxed, chooseIx, genModified)
 import Test.QuickCheck (Arbitrary, Gen)
 
 import qualified Data.List.NonEmpty as NE

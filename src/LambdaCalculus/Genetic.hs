@@ -2,7 +2,7 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
-module Genetic where
+module LambdaCalculus.Genetic where
 
 #if !MIN_VERSION_base(4,11,0)
 import Data.Semigroup ((<>))

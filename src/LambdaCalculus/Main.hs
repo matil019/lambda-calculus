@@ -5,7 +5,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-module Main where
+module LambdaCalculus.Main where
 
 #if !MIN_VERSION_base(4,11,0)
 import Data.Semigroup ((<>))
@@ -22,10 +22,8 @@ import Data.List.Extra (maximumOn)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Ord (Down(Down))
 import Data.Set (Set)
-import Genetic (Individual(Individual), newGeneration)
-import System.IO (BufferMode(LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
-import System.Time.Extra (Seconds, duration)
-import Term
+import LambdaCalculus.Genetic (Individual(Individual), newGeneration)
+import LambdaCalculus.Term
   ( ClosedTerm
   , Term
   , Var
@@ -37,6 +35,8 @@ import Term
   , pattern App
   , pattern Var
   )
+import System.IO (BufferMode(LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
+import System.Time.Extra (Seconds, duration)
 import Test.QuickCheck (arbitrary)
 import Text.Printf (printf)
 
