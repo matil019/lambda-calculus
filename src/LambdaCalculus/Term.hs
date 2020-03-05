@@ -103,7 +103,9 @@ data BoundTerm = BoundTerm
 --
 -- The first element is always @m@.
 --
--- TODO make sure that @length (linear m) == countTerm m@
+-- The following law holds:
+--
+-- > length ('linear' m) == 'countTerm' m
 linear :: Term -> NonEmpty Term
 linear m = m :| case m of
   Var _ -> []
@@ -155,7 +157,7 @@ ixBound = loop Set.empty
 genTerm :: Set Var -> Gen Term
 genTerm fv =
   if Set.null fv
-  then Q.scale (subtract 1) genAbs
+  then Q.scale (\sz -> max 1 (sz - 1)) genAbs
   else do
     -- assume that the probability of picking 'genVar' is @p@
     -- and the other two are @(1 - p) / 2@, resp.

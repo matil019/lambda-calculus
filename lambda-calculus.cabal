@@ -41,3 +41,16 @@ executable lambda-calculus
   -- hs-source-dirs:
   default-language:    Haskell2010
   ghc-options:         -Wall -rtsopts
+
+test-suite unittest
+  type:                exitcode-stdio-1.0
+  main-is:             Main.hs
+  other-modules:       LambdaCalculus.TermSpec
+  build-depends:       lambda-calculus, base
+                     , QuickCheck
+                     , containers
+                     , hspec
+                     , lens
+  hs-source-dirs:      test/unittest
+  default-language:    Haskell2010
+  ghc-options:         -Wall -fdefer-typed-holes
