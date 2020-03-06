@@ -18,7 +18,8 @@ build-type:          Simple
 extra-source-files:  CHANGELOG.md
 
 library
-  exposed-modules:     LambdaCalculus.Genetic
+  exposed-modules:     LambdaCalculus.DeBruijn
+                       LambdaCalculus.Genetic
                        LambdaCalculus.Main
                        LambdaCalculus.Term
   -- other-modules:
@@ -45,7 +46,8 @@ executable lambda-calculus
 test-suite unittest
   type:                exitcode-stdio-1.0
   main-is:             Main.hs
-  other-modules:       LambdaCalculus.TermSpec
+  other-modules:       LambdaCalculus.DeBruijnSpec
+                       LambdaCalculus.TermSpec
   build-depends:       lambda-calculus, base
                      , QuickCheck
                      , containers

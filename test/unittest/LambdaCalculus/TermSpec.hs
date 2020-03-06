@@ -4,8 +4,8 @@ import Control.Lens (ix, toListOf)
 import Data.Set (Set)
 import LambdaCalculus.Term
 import Test.Hspec
-import Test.QuickCheck (Arbitrary, arbitrary)
 import Test.Hspec.QuickCheck (prop)
+import Test.QuickCheck (Arbitrary, arbitrary)
 
 import qualified Data.List.NonEmpty as NE
 
