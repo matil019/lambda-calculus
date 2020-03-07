@@ -20,6 +20,7 @@ import GHC.Generics (Generic)
 import LambdaCalculus.Genetic (ChooseIxed, chooseIx, genModified)
 import Test.QuickCheck (Arbitrary, Gen)
 
+import qualified Data.List as List
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 import qualified Test.QuickCheck as Q
@@ -97,6 +98,23 @@ data BoundTerm = BoundTerm
   , boundVars :: Set Var
   }
   deriving (Eq, Generic, NFData, Show)
+
+alphaEqv :: Term -> Term -> Bool
+alphaEqv = go []
+  where
+  -- earlier elements in @dict@ is bound by inner abstractions
+  go :: [(Var, Var)] -> Term -> Term -> Bool
+  go dict (Var x) (Var y) =
+    case List.lookup x dict of
+      -- bound
+      Just y' -> y == y'
+      -- free
+      Nothing -> y == x
+  go dict (Abs x m) (Abs y n) =
+    go ((x, y):dict) m n
+  go dict (App m1 m2) (App n1 n2) =
+    go dict m1 n1 && go dict m2 n2
+  go _ _ _ = False
 
 -- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
 -- traversed in depth-first, pre-order.

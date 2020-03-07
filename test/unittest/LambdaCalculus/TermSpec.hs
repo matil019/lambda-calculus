@@ -26,3 +26,19 @@ spec = do
 
   prop "ix is consistent with linear" $ \(AnyTerm (_, m)) ->
     NE.toList (linear m) `shouldBe` [ n | i <- [0..(countTerm m)], n <- toListOf (ix i) m ]
+
+  describe "alphaEqv" $ do
+    prop "m == n => m `alphaEqv` n" $ \(AnyTerm (_, m)) ->
+      m `shouldSatisfy` (m `alphaEqv`)
+
+    it "same free variables => alphaEqv" $
+      Var "a" `shouldSatisfy` (Var "a" `alphaEqv`)
+
+    it "different free variables => not alphaEqv" $
+      Var "b" `shouldNotSatisfy` (Var "a" `alphaEqv`)
+
+    it "simple Abs" $
+      Abs "b" (Var "b") `shouldSatisfy` (Abs "a" (Var "a") `alphaEqv`)
+
+    it "simple App" $
+      App (Abs "b" (Var "b")) (Var "c") `shouldSatisfy` (App (Abs "a" (Var "a")) (Var "c") `alphaEqv`)
