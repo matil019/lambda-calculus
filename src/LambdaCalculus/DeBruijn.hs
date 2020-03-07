@@ -13,8 +13,9 @@ data Term
   | App Term Term  -- ^ An application
   deriving (Eq, Generic, NFData, Show)
 
-toDeBruijn :: Term.Term -> Term
-toDeBruijn = go []
+-- TODO Allow non-closed 'Term's
+toDeBruijn :: Term.ClosedTerm -> Term
+toDeBruijn = go [] . Term.unClosedTerm
   where
   go bound (Term.Var x) = Var (depth bound x)
   go bound (Term.Abs x m) = Abs (go (x:bound) m)
@@ -22,13 +23,16 @@ toDeBruijn = go []
 
   depth bound x = (+1) $ length $ takeWhile (/= x) bound
 
-fromDeBruijn :: Term -> Term.Term
-fromDeBruijn = go infinitevars []
+-- 'Term' is assumed to be closed. TODO remove this assumption
+fromDeBruijn :: Term -> Term.ClosedTerm
+fromDeBruijn = Term.ClosedTerm . go infinitevars []
   where
   -- @go free bound m@ recursively converts @m@ from DeBruijn notation to the ordinary one.
   --
   -- @free@ is an infinite list of unused free variables.
   -- @bound@ is a list of bound variables. Its first element is bound by the innermost abstraction.
+  -- memo: I wrote this in a hope that it works well with non-closed
+  -- terms. Since it works with closed terms, I leave this redundancy.
   go free bound (Var n) = case drop (n-1) bound of
     (x:_) -> Term.Var x
     [] -> Term.Var (free !! (n - length bound - 1))
