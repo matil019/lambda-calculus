@@ -1,19 +1,53 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 module LambdaCalculus.DeBruijn where
 
 import Control.DeepSeq (NFData)
+import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix)
 import Control.Monad.Trans.State.Strict (State, runState, state)
 import Data.List (elemIndex)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Tuple (swap)
+import LambdaCalculus.Genetic (ChooseIxed, chooseIx, genModified)
+import LambdaCalculus.Term (at)
 import GHC.Generics (Generic)
+import Test.QuickCheck (Arbitrary, Gen)
 
+import qualified Data.List.NonEmpty as NE
 import qualified LambdaCalculus.Term as Term
+import qualified Test.QuickCheck as Q
 
 data Term
   = Var Int        -- ^ A variable (starts at @1@)
   | Abs Term       -- ^ An abstraction
   | App Term Term  -- ^ An application
+  deriving (Eq, Generic, NFData, Show)
+
+-- | Traverses sub-terms in depth-first, pre-order.
+--
+-- This is consistent with 'index':
+-- > preview (ix i) == Just (index i)
+--
+-- See also 'ixBound'.
+--
+-- TODO make sure that @instance At Term@ does *not* form a "reasonable instance"
+instance Ixed Term where
+  ix :: Int -> Traversal' Term Term
+  ix i f = ixBound i (f . boundTerm)
+
+type instance Index Term = Int
+type instance IxValue Term = Term
+
+-- | A term with additional info about its enclosing term.
+data BoundTerm = BoundTerm
+  { boundTerm :: Term
+  -- | @boundTerm == Var x@ is bound if @x <= boundNum@.
+  , boundNum :: Int
+  }
   deriving (Eq, Generic, NFData, Show)
 
 -- | Converts a lambda 'Term.Term' to De Bruijn index 'Term'.
@@ -39,6 +73,8 @@ toDeBruijn = swap . flip runState [] . go []
 -- | The list must be long enough to have all the free variables the 'Term' refers.
 --
 -- The return value of 'toDeBruijn' can always be applied to 'fromDeBruijn'.
+--
+-- *NOTE* the list must be finite! (TODO add a newtype)
 fromDeBruijn :: [Term.Var] -> Term -> Term.Term
 fromDeBruijn free = go infinitevars []
   where
@@ -70,3 +106,103 @@ substitute s (Abs m) = Abs (substitute (Var 1 : map (\i -> substitute s' (Var i)
 reduceBeta :: Term -> Term
 reduceBeta (App (Abs m) n) = substitute (n:map Var [1..]) m
 reduceBeta m = m
+
+countTerm :: Term -> Int
+countTerm (Var _) = 1
+countTerm (Abs m) = 1 + countTerm m
+countTerm (App m n) = 1 + countTerm m + countTerm n
+
+-- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
+-- traversed in depth-first, pre-order.
+--
+-- The first element is always @m@.
+--
+-- The following law holds:
+--
+-- > length ('linear' m) == 'countTerm' m
+linear :: Term -> NonEmpty Term
+linear m = m :| case m of
+  Var _ -> []
+  Abs n -> NE.toList $ linear n
+  App n1 n2 -> NE.toList $ linear n1 <> linear n2
+
+-- | This list can never be empty. See 'linear'
+toList :: Term -> [Term]
+toList = NE.toList . linear
+
+-- | @index i m@ traverses @m@ to find a sub-term.
+--
+-- @m@ is traversed in depth-first, pre-order. @i == 0@ denotes @m@ itself.
+--
+-- > index 0 m == Just m
+-- > index 3 ('App' ('App' ('Var' \'x\') n) o) == Just n
+--
+-- Another equivalence:
+-- > 'toList' m !! i == fromJust ('index' i m)
+-- TODO add test
+index :: Int -> Term -> Maybe Term
+index i m = at i (toList m)
+
+-- | 'ix @Term' with an additional info. (See 'BoundTerm')
+ixBound :: Int -> Traversal Term Term BoundTerm Term
+ixBound = loop 0
+  where
+  loop :: Applicative f => Int -> Int -> (BoundTerm -> f Term) -> Term -> f Term
+  loop boundNum i f m
+    | i == 0 = f (BoundTerm{boundTerm = m, boundNum})
+    | i < 0 = pure m
+    | i >= countTerm m = pure m
+    | otherwise = case m of
+        Var _ -> pure m
+        Abs n -> Abs <$> loop (boundNum + 1) (i-1) f n
+        App n1 n2 -> App <$> loop boundNum (i-1) f n1 <*> loop boundNum (i-1-(countTerm n1)) f n2
+
+-- | Generates a 'Term' with a specified number of free variables.
+--
+-- The size parameter of 'Gen' is used as an average of a number of sub-terms
+-- in a term. Note that there is no upper limit of a size of a generated term;
+-- although rare, a huge term may be generated.
+--
+-- If the list is empty, @genTerm@ always generates a closed term in a form of an @'Abs' _@.
+-- TODO Allow @App@ (consider the size)
+genTerm :: Int -> Gen Term
+genTerm freeNum = do
+  -- see LambdaCalculus.Term.genTerm for explanation of the probability
+  size <- max 1 <$> Q.getSize
+  if freeNum >= 1
+    then do
+      let p = 10000 * (size + 2) `div` (3 * size)
+          q = (10000 - p) `div` 2
+      Q.frequency [(p, genVar), (q, genAbs), (q, genApp)]
+    else
+      genAbs
+  where
+  genVar = Var <$> Q.choose (1, freeNum)
+  genAbs = Abs <$> genTerm (freeNum+1)
+  genApp = App <$> genTerm freeNum <*> genTerm freeNum
+
+-- | Generates a modified 'Term'.
+--
+-- Picks a random sub-term and replaces it with a fresh one.
+genModifiedTerm :: Int -> Term -> Gen Term
+genModifiedTerm freeNum m = do
+  i <- Q.choose (0, countTerm m - 1)
+  flip (ixBound i) m $ \BoundTerm{boundNum} -> genTerm $ boundNum + freeNum
+
+-- | A closed lambda term. This assumption allows more type instances to be defined.
+newtype ClosedTerm = ClosedTerm { unClosedTerm :: Term }
+  deriving (Eq, Generic, NFData, Show)
+
+instance Arbitrary ClosedTerm where
+  arbitrary = ClosedTerm <$> genTerm 0
+
+instance Ixed ClosedTerm where
+  ix :: Int -> Traversal' ClosedTerm Term
+  ix i f = fmap ClosedTerm . ix i f . unClosedTerm
+
+instance ChooseIxed ClosedTerm where
+  chooseIx (ClosedTerm m) = Q.choose (0, countTerm m - 1)
+  genModified = fmap ClosedTerm . genModifiedTerm 0 . unClosedTerm
+
+type instance Index ClosedTerm = Int
+type instance IxValue ClosedTerm = Term

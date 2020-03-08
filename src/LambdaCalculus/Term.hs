@@ -25,6 +25,13 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 import qualified Test.QuickCheck as Q
 
+-- | A safe @(!!)@.
+at :: Int -> [a] -> Maybe a
+at i xs
+  | i < 0 = Nothing
+  | (x:_) <- drop i xs = Just x
+  | otherwise = Nothing
+
 type Var = String
 
 data TermRaw
@@ -41,8 +48,14 @@ data Term = Term
   }
   deriving (Eq, Generic, NFData, Show)
 
+-- | Traverses sub-terms in depth-first, pre-order.
+--
+-- This is consistent with 'index':
+-- > preview (ix i) == Just (index i)
+--
+-- See also 'ixBound'.
+--
 -- TODO make sure that @instance At Term@ does *not* form a "reasonable instance"
--- TODO make sure that this instance is consistent with 'linear'; or rather, implement it with this?
 instance Ixed Term where
   ix :: Int -> Traversal' Term Term
   ix i f = ixBound i (f . boundTerm)
@@ -145,11 +158,6 @@ toList = NE.toList . linear
 -- > 'toList' m !! i == fromJust ('index' i m)
 index :: Int -> Term -> Maybe Term
 index i m = at i (toList m)
-  where
-  at j xs
-    | j < 0 = Nothing
-    | (x:_) <- drop j xs = Just x
-    | otherwise = Nothing
 
 -- | 'ix @Term' with an additional info. (See 'BoundTerm')
 ixBound :: Int -> Traversal Term Term BoundTerm Term
@@ -171,7 +179,8 @@ ixBound = loop Set.empty
 -- in a term. Note that there is no upper limit of a size of a generated term;
 -- although rare, a huge term may be generated.
 --
--- If the list is empty, @genTerm@ always generates a closed term i.e. an 'Abs'.
+-- If the list is empty, @genTerm@ always generates a closed term in a form of an @'Abs' _ _@.
+-- TODO Allow @App@ (consider the size)
 genTerm :: Set Var -> Gen Term
 genTerm fv =
   if Set.null fv
