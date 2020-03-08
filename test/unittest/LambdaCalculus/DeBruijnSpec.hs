@@ -13,10 +13,12 @@ spec = do
 
   -- an alternative to above until I define @instance Arbitrary DeBruijn.Term@
   prop "toDeBruijn . fromDeBruijn . toDeBruijn == toDeBruijn" $ \m ->
-    (toDeBruijn . fromDeBruijn . toDeBruijn) m `shouldBe` toDeBruijn m
+    -- TODO stop using ClosedTerm
+    (toDeBruijn . Term.unClosedTerm . fromDeBruijn . fst . toDeBruijn . Term.unClosedTerm) m `shouldBe` (toDeBruijn . Term.unClosedTerm) m
 
   prop "fromDeBruijn (toDeBruijn m) `alphaEqv` m" $ \m ->
-    Term.unClosedTerm (fromDeBruijn (toDeBruijn m)) `shouldSatisfy` (`Term.alphaEqv` Term.unClosedTerm m)
+    -- TODO stop using ClosedTerm
+    (Term.unClosedTerm . fromDeBruijn . fst . toDeBruijn . Term.unClosedTerm) m `shouldSatisfy` (`Term.alphaEqv` Term.unClosedTerm m)
 
   describe "reduceBeta" $ do
     it "arbitrary Term.ClosedTerm" $

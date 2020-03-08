@@ -3,25 +3,37 @@
 module LambdaCalculus.DeBruijn where
 
 import Control.DeepSeq (NFData)
+import Control.Monad.Trans.State.Strict (State, runState, state)
+import Data.List (elemIndex)
 import GHC.Generics (Generic)
 
 import qualified LambdaCalculus.Term as Term
 
 data Term
-  = Var Int        -- ^ A variable
+  = Var Int        -- ^ A variable (starts at @1@)
   | Abs Term       -- ^ An abstraction
   | App Term Term  -- ^ An application
   deriving (Eq, Generic, NFData, Show)
 
--- TODO Allow non-closed 'Term's
-toDeBruijn :: Term.ClosedTerm -> Term
-toDeBruijn = go [] . Term.unClosedTerm
+-- | Converts a lambda 'Term.Term' to De Bruijn index 'Term'.
+--
+-- The second value in the returned tuple is an ordered set of free variables
+-- which the first refers.
+toDeBruijn :: Term.Term -> (Term, [Term.Var])
+toDeBruijn = flip runState [] . go []
   where
-  go bound (Term.Var x) = Var (depth bound x)
-  go bound (Term.Abs x m) = Abs (go (x:bound) m)
-  go bound (Term.App m n) = App (go bound m) (go bound n)
-
-  depth bound x = (+1) $ length $ takeWhile (/= x) bound
+  go :: [Term.Var] -> Term.Term -> State [Term.Var] Term
+  go bound (Term.Var x)
+    | Just idx <- elemIndex x bound = pure (Var (idx + 1))
+    | otherwise = state $ \free ->
+        case elemIndex x free of
+          Just idx -> (Var (length bound + idx + 1), free)
+          Nothing  -> (Var (length bound + length free + 1), free <> [x])
+  go bound (Term.Abs x m) = Abs <$> go (x:bound) m
+  go bound (Term.App m n) = do
+    m' <- go bound m
+    n' <- go bound n
+    pure $ App m' n'
 
 -- 'Term' is assumed to be closed. TODO remove this assumption
 fromDeBruijn :: Term -> Term.ClosedTerm
