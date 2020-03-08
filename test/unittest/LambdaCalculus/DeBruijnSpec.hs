@@ -1,6 +1,7 @@
 module LambdaCalculus.DeBruijnSpec where
 
 import LambdaCalculus.DeBruijn
+import LambdaCalculus.TermSpec (AnyTerm(AnyTerm))
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 
@@ -12,13 +13,11 @@ spec = do
     pendingWith "instance Arbitrary DeBruijn.Term not defined"
 
   -- an alternative to above until I define @instance Arbitrary DeBruijn.Term@
-  prop "toDeBruijn . fromDeBruijn . toDeBruijn == toDeBruijn" $ \m ->
-    -- TODO stop using ClosedTerm
-    (toDeBruijn . Term.unClosedTerm . fromDeBruijn . fst . toDeBruijn . Term.unClosedTerm) m `shouldBe` (toDeBruijn . Term.unClosedTerm) m
+  prop "toDeBruijn . fromDeBruijn . toDeBruijn == toDeBruijn" $ \(AnyTerm (_, m)) ->
+    (toDeBruijn . uncurry fromDeBruijn . toDeBruijn) m `shouldBe` toDeBruijn m
 
-  prop "fromDeBruijn (toDeBruijn m) `alphaEqv` m" $ \m ->
-    -- TODO stop using ClosedTerm
-    (Term.unClosedTerm . fromDeBruijn . fst . toDeBruijn . Term.unClosedTerm) m `shouldSatisfy` (`Term.alphaEqv` Term.unClosedTerm m)
+  prop "fromDeBruijn (toDeBruijn m) `alphaEqv` m" $ \(AnyTerm (_, m)) ->
+    (uncurry fromDeBruijn . toDeBruijn) m `shouldSatisfy` (`Term.alphaEqv` m)
 
   describe "reduceBeta" $ do
     it "arbitrary Term.ClosedTerm" $
