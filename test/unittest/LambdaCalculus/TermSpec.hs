@@ -8,6 +8,8 @@ import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (Arbitrary, arbitrary)
 
 import qualified Data.List.NonEmpty as NE
+import qualified Data.Set as Set
+import qualified Test.QuickCheck as Q
 
 -- | A pair of free variables and a term. This enables defining an instance Arbitrary for testing.
 newtype AnyTerm = AnyTerm (Set Var, Term)
@@ -18,6 +20,18 @@ instance Arbitrary AnyTerm where
     vars <- arbitrary
     m <- genTerm vars
     pure $ AnyTerm (vars, m)
+
+newtype BetaReducibleTerm = BetaReducibleTerm (Set Var, Term)
+  deriving Show
+
+-- | Generates a pair of free variables and a beta-reducible term.
+instance Arbitrary BetaReducibleTerm where
+  arbitrary = do
+    bound <- arbitrary
+    free <- Q.suchThat arbitrary (bound `notElem`)
+    m <- genTerm (Set.insert bound free)
+    n <- genTerm (Set.insert bound free)
+    pure $ BetaReducibleTerm (free, App (Abs bound m) n)
 
 spec :: Spec
 spec = do

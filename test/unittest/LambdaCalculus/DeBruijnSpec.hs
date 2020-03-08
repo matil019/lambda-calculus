@@ -1,7 +1,7 @@
 module LambdaCalculus.DeBruijnSpec where
 
 import LambdaCalculus.DeBruijn
-import LambdaCalculus.TermSpec (AnyTerm(AnyTerm))
+import LambdaCalculus.TermSpec (AnyTerm(AnyTerm), BetaReducibleTerm(BetaReducibleTerm))
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 
@@ -22,7 +22,7 @@ spec = do
     (uncurry fromDeBruijn . toDeBruijn) m `shouldSatisfy` (`Term.alphaEqv` m)
 
   describe "reduceBeta" $ do
-    prop "arbitrary Term.ClosedTerm" $ \(AnyTerm (_, m)) ->
+    prop "arbitrary Term.BetaReducibleTerm" $ \(BetaReducibleTerm (_, m)) ->
       case m of
         Term.App (Term.Abs _ _) _ ->
           let (free, m') = toDeBruijn m
