@@ -17,3 +17,12 @@ spec = do
 
   prop "fromDeBruijn (toDeBruijn m) `alphaEqv` m" $ \m ->
     Term.unClosedTerm (fromDeBruijn (toDeBruijn m)) `shouldSatisfy` (`Term.alphaEqv` Term.unClosedTerm m)
+
+  describe "reduceBeta" $ do
+    it "arbitrary Term.ClosedTerm" $
+      pendingWith "needs non-closed terms"
+    -- prop "arbitrary Term.ClosedTerm" $ \cm ->
+    --   case cm of
+    --     Term.ClosedTerm m@(Term.App (Term.Abs _ _) _) ->
+    --       (fromDeBruijn $ reduceBeta $ toDeBruijn cm) `shouldBe` (Term.ClosedTerm $ Term.reduceBeta m)
+    --     _ -> Q.discard

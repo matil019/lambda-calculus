@@ -45,3 +45,16 @@ fromDeBruijn = Term.ClosedTerm . go infinitevars []
 
   -- infinite list of strings, "a" : "b" : ... : "z" : "aa" : "ab" : ...
   infinitevars = concat $ iterate (\ss -> [ c:s | c <- ['a'..'z'], s <- ss ]) [ [c] | c <- ['a'..'z'] ]
+
+-- | The list must be infinite. TODO add a newtype
+substitute :: [Term] -> Term -> Term
+substitute s (Var x) = s !! (x-1)
+substitute s (App m n) = App (substitute s m) (substitute s n)
+substitute s (Abs m) = Abs (substitute (Var 1 : map (\i -> substitute s' (Var i)) [1..]) m)
+  where
+  s' = map shift s
+  shift = substitute (map Var [2..])
+
+reduceBeta :: Term -> Term
+reduceBeta (App (Abs m) n) = substitute (n:map Var [1..]) m
+reduceBeta m = m
