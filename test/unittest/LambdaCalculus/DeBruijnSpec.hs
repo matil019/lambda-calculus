@@ -5,7 +5,9 @@ import LambdaCalculus.TermSpec (AnyTerm(AnyTerm))
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 
+import qualified LambdaCalculus.Main as Term  -- TODO move reduceBeta to LambdaCalculus.Term
 import qualified LambdaCalculus.Term as Term
+import qualified Test.QuickCheck as Q
 
 spec :: Spec
 spec = do
@@ -20,10 +22,9 @@ spec = do
     (uncurry fromDeBruijn . toDeBruijn) m `shouldSatisfy` (`Term.alphaEqv` m)
 
   describe "reduceBeta" $ do
-    it "arbitrary Term.ClosedTerm" $
-      pendingWith "needs non-closed terms"
-    -- prop "arbitrary Term.ClosedTerm" $ \cm ->
-    --   case cm of
-    --     Term.ClosedTerm m@(Term.App (Term.Abs _ _) _) ->
-    --       (fromDeBruijn $ reduceBeta $ toDeBruijn cm) `shouldBe` (Term.ClosedTerm $ Term.reduceBeta m)
-    --     _ -> Q.discard
+    prop "arbitrary Term.ClosedTerm" $ \(AnyTerm (_, m)) ->
+      case m of
+        Term.App (Term.Abs _ _) _ ->
+          let (free, m') = toDeBruijn m
+          in fromDeBruijn free (reduceBeta m') `shouldSatisfy` (`Term.alphaEqv` Term.reduceBeta m)
+        _ -> Q.discard
