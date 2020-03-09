@@ -12,14 +12,14 @@ import Data.Semigroup ((<>))
 #endif
 
 import Control.DeepSeq (NFData)
-import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix)
+import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix, preview, set)
 import Control.Monad.Trans.State.Strict (State, runState, state)
 import Data.Conduit ((.|), ConduitT, runConduitPure)
 import Data.List (elemIndex)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Tuple (swap)
 import Data.Tuple.Extra (dupe)
-import LambdaCalculus.Genetic (ChooseIxed, chooseIx, genModified)
+import LambdaCalculus.Genetic (Genetic)
 import LambdaCalculus.Term (at)
 import Numeric.Natural (Natural)
 import GHC.Generics (Generic)
@@ -27,6 +27,7 @@ import Test.QuickCheck (Arbitrary, Gen)
 
 import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
+import qualified LambdaCalculus.Genetic
 import qualified LambdaCalculus.Term as Term
 import qualified Test.QuickCheck as Q
 
@@ -204,9 +205,17 @@ instance Ixed ClosedTerm where
   ix :: Int -> Traversal' ClosedTerm Term
   ix i f = fmap ClosedTerm . ix i f . unClosedTerm
 
-instance ChooseIxed ClosedTerm where
-  chooseIx (ClosedTerm m) = Q.choose (0, countTerm m - 1)
-  genModified = fmap ClosedTerm . genModifiedTerm 0 . unClosedTerm
+instance Genetic ClosedTerm where
+  genChildren (parent1, parent2) = do
+    i1 <- Q.choose (0, countTerm (unClosedTerm parent1) - 1)
+    i2 <- Q.choose (0, countTerm (unClosedTerm parent2) - 1)
+    let sub1 = preview (ix i1) parent1
+        sub2 = preview (ix i2) parent2
+        child1 = maybe id (set (ix i1)) sub2 $ parent1
+        child2 = maybe id (set (ix i2)) sub1 $ parent2
+    pure (child1, child2)
+
+  genMutant = fmap ClosedTerm . genModifiedTerm 0 . unClosedTerm
 
 type instance Index ClosedTerm = Int
 type instance IxValue ClosedTerm = Term
