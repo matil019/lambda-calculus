@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -14,12 +15,17 @@ import Data.Semigroup ((<>))
 
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix)
+import Data.Conduit ((.|), ConduitT, runConduitPure)
+import Data.List (find)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Set (Set)
+import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
 import LambdaCalculus.Genetic (ChooseIxed, chooseIx, genModified)
+import Numeric.Natural (Natural)
 import Test.QuickCheck (Arbitrary, Gen)
 
+import qualified Data.Conduit.Combinators as C
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
@@ -111,6 +117,11 @@ data BoundTerm = BoundTerm
   , boundVars :: Set Var
   }
   deriving (Eq, Generic, NFData, Show)
+
+formatTerm :: Term -> String
+formatTerm (Var x) = x
+formatTerm (Abs x m) = "(\\" <> x <> "." <> formatTerm m <> ")"
+formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 
 alphaEqv :: Term -> Term -> Bool
 alphaEqv = go []
@@ -231,3 +242,68 @@ instance ChooseIxed ClosedTerm where
 
 type instance Index ClosedTerm = Int
 type instance IxValue ClosedTerm = Term
+
+convertAlpha :: Var -> Term -> Term
+convertAlpha x (Abs y m) = Abs x $! substitute y (Var x) m
+convertAlpha _ m = m
+
+newFreeVar :: Set Var -> Var
+newFreeVar except = case find (`Set.notMember` except) infinitealphabets of
+  Just ok -> ok
+  Nothing -> error "newFreeVar: no vars available"
+  where
+  -- infinite list of strings, "a" : "b" : ... : "z" : "aa" : "ab" : ...
+  infinitealphabets = concat $ iterate (\ss -> [ c:s | c <- ['a'..'z'], s <- ss ]) [ [c] | c <- ['a'..'z'] ]
+
+substitute :: Var -> Term -> Term -> Term
+substitute x n (Var y)
+  | x == y    = n
+  | otherwise = Var y
+substitute x n (App m1 m2) =
+  let !m1' = substitute x n m1
+      !m2' = substitute x n m2
+  in n `seq` App m1' m2'
+substitute x n (Abs y m)
+  | x == y = Abs y m
+  | x /= y && y `notElem` freeVars n = Abs y $! substitute x n m
+  -- TODO not needed to recurse substitute again, but for that it needs a distinct @Abs@ type
+  | otherwise = substitute x n $! convertAlpha (newFreeVar (Set.insert x (freeVars n))) (Abs y m)
+
+-- | Performs beta-reduction.
+--
+-- Automatically does alpha-conversions if needed.
+reduceBeta :: Term -> Term
+reduceBeta (App (Abs x m) n) = substitute x n m
+reduceBeta m = m
+
+reduceStep :: Term -> Maybe Term
+reduceStep (Var _) = Nothing
+reduceStep (Abs _ _) = Nothing
+reduceStep m@(App (Abs _ _) _) = Just $ reduceBeta m
+reduceStep (App m n) = case reduceStep m of
+  Just m' -> Just $ App m' n
+  Nothing -> App m <$> reduceStep n
+
+reduceSteps :: Monad m => Term -> ConduitT i Term m ()
+reduceSteps = C.unfold (fmap dupe . reduceStep)
+
+interpretChurchNumber :: Term -> Maybe Int
+interpretChurchNumber = \m ->
+  go $
+    let m' = App (App m (Var "+")) (Var "0")
+    in
+    runConduitPure
+        $ reduceSteps m'
+       .| C.take 1000
+       .| C.takeWhile ((<= 1000000) . countTerm)
+       .| C.lastDef m'
+  where
+  go (Var "0") = Just 0
+  go (App (Var "+") n) = fmap (1+) $ go n
+  go _ = Nothing
+
+genChurchNumber :: Q.Gen Term
+genChurchNumber = Abs "f" . Abs "x" <$> genTerm (Set.fromList ["f", "x"])
+
+encodeChurchNumber :: Natural -> Term
+encodeChurchNumber n = Abs "f" $ Abs "x" $ iterate (App (Var "f")) (Var "x") !! fromIntegral n

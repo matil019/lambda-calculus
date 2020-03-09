@@ -14,28 +14,25 @@ import Data.Semigroup ((<>))
 import Control.Exception (SomeException, mask, throwIO)
 import Control.Monad (replicateM)
 import Control.Monad.IO.Class (liftIO)
-import Data.Conduit ((.|), ConduitT, runConduit, runConduitPure)
+import Data.Conduit ((.|), ConduitT, runConduit)
 import Data.Foldable (for_, traverse_)
 import Data.IORef (newIORef, readIORef, writeIORef)
-import Data.List (find, intercalate, sortOn)
+import Data.List (intercalate, sortOn)
 import Data.List.Extra (maximumOn)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Ord (Down(Down))
-import Data.Set (Set)
-import Data.Tuple.Extra (dupe)
 import LambdaCalculus.Genetic (Individual(Individual), newGeneration)
 import LambdaCalculus.Term
   ( ClosedTerm
   , Term
-  , Var
   , countTerm
-  , freeVars
-  , genTerm
+  , encodeChurchNumber
+  , formatTerm
+  , interpretChurchNumber
   , unClosedTerm
-  , pattern Abs
   , pattern App
-  , pattern Var
   )
+import Numeric.Natural (Natural)
 import System.IO (BufferMode(LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
 import System.Time.Extra (Seconds, duration)
 import Test.QuickCheck (arbitrary)
@@ -44,7 +41,6 @@ import Text.Printf (printf)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
-import qualified Data.Set as Set
 import qualified Test.QuickCheck as Q
 
 average :: NonEmpty Double -> Double
@@ -52,55 +48,6 @@ average xs = sum xs / realToFrac (length xs)
 
 log10 :: Double -> Double
 log10 x = log x / log 10
-
-convertAlpha :: Var -> Term -> Term
-convertAlpha x (Abs y m) = Abs x $! substitute y (Var x) m
-convertAlpha _ m = m
-
-newFreeVar :: Set Var -> Var
-newFreeVar except = case find (`Set.notMember` except) infinitealphabets of
-  Just ok -> ok
-  Nothing -> error "newFreeVar: no vars available"
-  where
-  -- infinite list of strings, "a" : "b" : ... : "z" : "aa" : "ab" : ...
-  infinitealphabets = concat $ iterate (\ss -> [ c:s | c <- ['a'..'z'], s <- ss ]) [ [c] | c <- ['a'..'z'] ]
-
-substitute :: Var -> Term -> Term -> Term
-substitute x n (Var y)
-  | x == y    = n
-  | otherwise = Var y
-substitute x n (App m1 m2) =
-  let !m1' = substitute x n m1
-      !m2' = substitute x n m2
-  in n `seq` App m1' m2'
-substitute x n (Abs y m)
-  | x == y = Abs y m
-  | x /= y && y `notElem` freeVars n = Abs y $! substitute x n m
-  -- TODO not needed to recurse substitute again, but for that it needs a distinct @Abs@ type
-  | otherwise = substitute x n $! convertAlpha (newFreeVar (Set.insert x (freeVars n))) (Abs y m)
-
--- | Performs beta-reduction.
---
--- Automatically does alpha-conversions if needed.
-reduceBeta :: Term -> Term
-reduceBeta (App (Abs x m) n) = substitute x n m
-reduceBeta m = m
-
-reduceStep :: Term -> Maybe Term
-reduceStep (Var _) = Nothing
-reduceStep (Abs _ _) = Nothing
-reduceStep m@(App (Abs _ _) _) = Just $ reduceBeta m
-reduceStep (App m n) = case reduceStep m of
-  Just m' -> Just $ App m' n
-  Nothing -> App m <$> reduceStep n
-
-reduceSteps :: Monad m => Term -> ConduitT i Term m ()
-reduceSteps = C.unfold (fmap dupe . reduceStep)
-
-formatTerm :: Term -> String
-formatTerm (Var x) = x
-formatTerm (Abs x m) = "(\\" <> x <> "." <> formatTerm m <> ")"
-formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 
 zipWithIndexC :: Monad m => ConduitT a (a, Int) m ()
 zipWithIndexC = loop 0
@@ -113,34 +60,11 @@ zipWithIndexC = loop 0
         C.yield (a, i)
         loop $! i + 1
 
-interpretChurchNumber :: Term -> Maybe Int
-interpretChurchNumber = \m ->
-  go $
-    let m' = App (App m (Var "+")) (Var "0")
-    in
-    runConduitPure
-        $ reduceSteps m'
-       .| C.take 1000
-       .| C.takeWhile ((<= 1000000) . countTerm)
-       .| C.lastDef m'
-  where
-  go (Var "0") = Just 0
-  go (App (Var "+") n) = fmap (1+) $ go n
-  go _ = Nothing
-
-genChurchNumber :: Q.Gen Term
-genChurchNumber = Abs "f" . Abs "x" <$> genTerm (Set.fromList ["f", "x"])
-
-encodeChurchNumber :: Int -> Term
-encodeChurchNumber n
-  | n < 0 = error "encodeChurchNumber: negative number"
-  | otherwise = Abs "f" $ Abs "x" $ iterate (App (Var "f")) (Var "x") !! n
-
-data Result = Result [(Int, Int, Maybe Int)]
+data Result = Result [(Natural, Natural, Maybe Int)]
   deriving (Eq, Ord, Show)
 
 resultScore :: Result -> Int
-resultScore (Result xs) = sum $ map (\(a, b, r) -> btoi (Just (a + b) == r)) xs
+resultScore (Result xs) = sum $ map (\(a, b, r) -> btoi (Just (fromIntegral (a + b)) == r)) xs
   where
   btoi True  = 1
   btoi False = 0

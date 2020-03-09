@@ -7,7 +7,6 @@ import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (Arbitrary, arbitrary)
 
 import qualified Data.List.NonEmpty as NE
-import qualified LambdaCalculus.Main as Term  -- TODO move reduceBeta to LambdaCalculus.Term
 import qualified LambdaCalculus.Term as Term
 import qualified LambdaCalculus.TermSpec as Term
 import qualified Test.QuickCheck as Q

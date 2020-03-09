@@ -16,6 +16,7 @@ import Data.Tuple (swap)
 import Data.Tuple.Extra (dupe)
 import LambdaCalculus.Genetic (ChooseIxed, chooseIx, genModified)
 import LambdaCalculus.Term (at)
+import Numeric.Natural (Natural)
 import GHC.Generics (Generic)
 import Test.QuickCheck (Arbitrary, Gen)
 
@@ -247,7 +248,5 @@ interpretChurchNumber = \m ->
 genChurchNumber :: Gen Term
 genChurchNumber = Abs . Abs <$> genTerm 2
 
-encodeChurchNumber :: Int -> Term
-encodeChurchNumber n
-  | n < 0 = error "encodeChurchNumber: negative number"
-  | otherwise = Abs $ Abs $ iterate (App (Var 2)) (Var 1) !! n
+encodeChurchNumber :: Natural -> Term
+encodeChurchNumber n = Abs $ Abs $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
