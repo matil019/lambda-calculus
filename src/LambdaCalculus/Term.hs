@@ -115,7 +115,7 @@ pattern App m n <- Term { termRaw = AppRaw m n }
 -- | A term with additional info about its enclosing term.
 data BoundTerm = BoundTerm
   { boundTerm :: Term
-  , boundVars :: Set Var
+  , boundVars :: [Var]  -- ^ A variable bound by the innermost 'Abs' comes first
   }
   deriving (Eq, Generic, NFData, Show)
 
@@ -173,16 +173,16 @@ index i m = at i (toList m)
 
 -- | 'ix @Term' with an additional info. (See 'BoundTerm')
 ixBound :: Int -> Traversal Term Term BoundTerm Term
-ixBound = loop Set.empty
+ixBound = loop []
   where
-  loop :: Applicative f => Set Var -> Int -> (BoundTerm -> f Term) -> Term -> f Term
+  loop :: Applicative f => [Var] -> Int -> (BoundTerm -> f Term) -> Term -> f Term
   loop bound i f m
     | i == 0 = f (BoundTerm{boundTerm = m, boundVars = bound})
     | i < 0 = pure m
     | i >= countTerm m = pure m -- for performance only; avoids unnecessary traversal especially on recursion
     | otherwise = case m of
         Var _ -> pure m
-        Abs x n -> Abs x <$> loop (Set.insert x bound) (i-1) f n
+        Abs x n -> Abs x <$> loop (x:bound) (i-1) f n
         App n1 n2 -> App <$> loop bound (i-1) f n1 <*> loop bound (i-1-(countTerm n1)) f n2
 
 -- | Generates a 'Term' with a specified set of free variables.
@@ -224,7 +224,7 @@ genTerm fv =
 genModifiedTerm :: Set Var -> Term -> Gen Term
 genModifiedTerm fv m = do
   i <- Q.choose (0, countTerm m - 1)
-  flip (ixBound i) m $ \BoundTerm{boundVars} -> genTerm $ fv <> boundVars
+  flip (ixBound i) m $ \BoundTerm{boundVars} -> genTerm $ fv <> Set.fromList boundVars
 
 -- | A closed lambda term. This assumption allows more type instances to be defined.
 newtype ClosedTerm = ClosedTerm { unClosedTerm :: Term }
