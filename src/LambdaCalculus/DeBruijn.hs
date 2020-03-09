@@ -54,8 +54,11 @@ data BoundTerm = BoundTerm
 --
 -- The first value in the returned tuple is an ordered set of free variables
 -- which the second refers.
-toDeBruijn :: Term.Term -> ([Term.Var], Term)
-toDeBruijn = swap . flip runState [] . go []
+toDeBruijn
+  :: [Term.Var]  -- ^ Known free variables; the return value is guaranteed to begin with this list
+  -> Term.Term   -- ^ The term to convert
+  -> ([Term.Var], Term)
+toDeBruijn = \free -> swap . flip runState free . go []
   where
   go :: [Term.Var] -> Term.Term -> State [Term.Var] Term
   go bound (Term.Var x)

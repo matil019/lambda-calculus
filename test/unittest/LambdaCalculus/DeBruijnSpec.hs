@@ -34,15 +34,16 @@ spec = do
 
   describe "conversion between the other notation" $ do
     prop "(toDeBruijn . fromDeBruijn) m == m" $ \(AnyTerm (num, m)) ->
-      (snd . toDeBruijn . fromDeBruijn (map show [1..num])) m `shouldBe` m
+      let free = (map show [1..num])
+      in (snd . toDeBruijn free . fromDeBruijn free) m `shouldBe` m
 
     prop "(fromDeBruijn . toDeBruijn) m `alphaEqv` m" $ \(Term.AnyTerm (_, m)) ->
-      (uncurry fromDeBruijn . toDeBruijn) m `shouldSatisfy` (`Term.alphaEqv` m)
+      (uncurry fromDeBruijn . toDeBruijn []) m `shouldSatisfy` (`Term.alphaEqv` m)
 
     describe "reduceBeta" $ do
       prop "arbitrary Term.BetaReducibleTerm" $ \(Term.BetaReducibleTerm (_, m)) ->
         case m of
           Term.App (Term.Abs _ _) _ ->
-            let (free, m') = toDeBruijn m
+            let (free, m') = toDeBruijn [] m
             in fromDeBruijn free (reduceBeta m') `shouldSatisfy` (`Term.alphaEqv` Term.reduceBeta m)
           _ -> Q.discard
