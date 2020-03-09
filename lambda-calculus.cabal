@@ -52,6 +52,7 @@ test-suite unittest
   build-depends:       lambda-calculus, base
                      , QuickCheck
                      , containers
+                     , extra
                      , hspec
                      , lens
   hs-source-dirs:      test/unittest

@@ -22,6 +22,7 @@ import Data.List.Extra (maximumOn)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Ord (Down(Down))
 import Data.Set (Set)
+import Data.Tuple.Extra (dupe)
 import LambdaCalculus.Genetic (Individual(Individual), newGeneration)
 import LambdaCalculus.Term
   ( ClosedTerm
@@ -45,10 +46,6 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 import qualified Test.QuickCheck as Q
-
--- borrowed from "extra"
-dupe :: a -> (a, a)
-dupe a = (a, a)
 
 average :: NonEmpty Double -> Double
 average xs = sum xs / realToFrac (length xs)
@@ -136,7 +133,7 @@ genChurchNumber = Abs "f" . Abs "x" <$> genTerm (Set.fromList ["f", "x"])
 
 encodeChurchNumber :: Int -> Term
 encodeChurchNumber n
-  | n < 0 = error "encodeNat: negative number"
+  | n < 0 = error "encodeChurchNumber: negative number"
   | otherwise = Abs "f" $ Abs "x" $ iterate (App (Var "f")) (Var "x") !! n
 
 data Result = Result [(Int, Int, Maybe Int)]

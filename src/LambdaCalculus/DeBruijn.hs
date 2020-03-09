@@ -9,14 +9,17 @@ module LambdaCalculus.DeBruijn where
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix)
 import Control.Monad.Trans.State.Strict (State, runState, state)
+import Data.Conduit ((.|), ConduitT, runConduitPure)
 import Data.List (elemIndex)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Tuple (swap)
+import Data.Tuple.Extra (dupe)
 import LambdaCalculus.Genetic (ChooseIxed, chooseIx, genModified)
 import LambdaCalculus.Term (at)
 import GHC.Generics (Generic)
 import Test.QuickCheck (Arbitrary, Gen)
 
+import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
 import qualified LambdaCalculus.Term as Term
 import qualified Test.QuickCheck as Q
@@ -97,18 +100,10 @@ fromDeBruijn free = go infinitevars []
   -- infinite list of strings, "a" : "b" : ... : "z" : "aa" : "ab" : ...
   infinitevars = filter (`notElem` free) $ concat $ iterate (\ss -> [ c:s | c <- ['a'..'z'], s <- ss ]) [ [c] | c <- ['a'..'z'] ]
 
--- | The list must be infinite. TODO add a newtype
-substitute :: [Term] -> Term -> Term
-substitute s (Var x) = s !! (x-1)
-substitute s (App m n) = App (substitute s m) (substitute s n)
-substitute s (Abs m) = Abs (substitute (Var 1 : map (\i -> substitute s' (Var i)) [1..]) m)
-  where
-  s' = map shift s
-  shift = substitute (map Var [2..])
-
-reduceBeta :: Term -> Term
-reduceBeta (App (Abs m) n) = substitute (n:map Var [1..]) m
-reduceBeta m = m
+formatTerm :: Term -> String
+formatTerm (Var x) = show x
+formatTerm (Abs m) = "(\\ " <> formatTerm m <> ")"
+formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 
 countTerm :: Term -> Int
 countTerm (Var _) = 1
@@ -209,3 +204,50 @@ instance ChooseIxed ClosedTerm where
 
 type instance Index ClosedTerm = Int
 type instance IxValue ClosedTerm = Term
+
+-- | The list must be infinite. TODO add a newtype
+substitute :: [Term] -> Term -> Term
+substitute s (Var x) = s !! (x-1)
+substitute s (App m n) = App (substitute s m) (substitute s n)
+substitute s (Abs m) = Abs (substitute (Var 1 : map (\i -> substitute s' (Var i)) [1..]) m)
+  where
+  s' = map shift s
+  shift = substitute (map Var [2..])
+
+reduceBeta :: Term -> Term
+reduceBeta (App (Abs m) n) = substitute (n:map Var [1..]) m
+reduceBeta m = m
+
+reduceStep :: Term -> Maybe Term
+reduceStep (Var _) = Nothing
+reduceStep (Abs _) = Nothing
+reduceStep m@(App (Abs _) _) = Just $ reduceBeta m
+reduceStep (App m n) = case reduceStep m of
+  Just m' -> Just $ App m' n
+  Nothing -> App m <$> reduceStep n
+
+reduceSteps :: Monad m => Term -> ConduitT i Term m ()
+reduceSteps = C.unfold (fmap dupe . reduceStep)
+
+interpretChurchNumber :: Term -> Maybe Int
+interpretChurchNumber = \m ->
+  go $
+    let m' = App (App m (Var 2)) (Var 1)
+    in
+    runConduitPure
+       $ reduceSteps m'
+      .| C.take 1000
+      .| C.takeWhile ((<= 1000000) . countTerm)
+      .| C.lastDef m'
+  where
+  go (Var 1) = Just 0
+  go (App (Var 2) n) = fmap (1+) $ go n
+  go _ = Nothing
+
+genChurchNumber :: Gen Term
+genChurchNumber = Abs . Abs <$> genTerm 2
+
+encodeChurchNumber :: Int -> Term
+encodeChurchNumber n
+  | n < 0 = error "encodeChurchNumber: negative number"
+  | otherwise = Abs $ Abs $ iterate (App (Var 2)) (Var 1) !! n
