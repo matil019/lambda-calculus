@@ -13,14 +13,15 @@ import Data.Semigroup ((<>))
 #endif
 
 import Control.DeepSeq (NFData)
-import Control.Lens (Index, IxValue, Ixed, Traversal', ix, preview, set)
+import Control.Lens (Index, IxValue, Ixed, Traversal', ix)
 import Data.Conduit ((.|), ConduitT, runConduitPure)
 import Data.List (find)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Set (Set)
 import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
-import LambdaCalculus.Genetic (Genetic)
+import LambdaCalculus.DeBruijn (fromDeBruijn, toDeBruijn)
+import LambdaCalculus.Genetic (Genetic, genChildren)
 import LambdaCalculus.Term.Types
 import Numeric.Natural (Natural)
 import Test.QuickCheck (Arbitrary, Gen)
@@ -29,6 +30,7 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
+import qualified LambdaCalculus.DeBruijn as DeBruijn
 import qualified LambdaCalculus.Genetic
 import qualified Test.QuickCheck as Q
 
@@ -137,14 +139,13 @@ instance Ixed ClosedTerm where
   ix i f = fmap ClosedTerm . ix i f . unClosedTerm
 
 instance Genetic ClosedTerm where
+  -- TODO implement without converting to DeBruijn (for performance)?
   genChildren (parent1, parent2) = do
-    i1 <- Q.choose (0, countTerm (unClosedTerm parent1) - 1)
-    i2 <- Q.choose (0, countTerm (unClosedTerm parent2) - 1)
-    let sub1 = preview (ix i1) parent1
-        sub2 = preview (ix i2) parent2
-        child1 = maybe id (set (ix i1)) sub2 $ parent1
-        child2 = maybe id (set (ix i2)) sub1 $ parent2
-    pure (child1, child2)
+    (child1, child2) <- genChildren (to parent1, to parent2)
+    pure (from child1, from child2)
+    where
+    to = DeBruijn.ClosedTerm . snd . toDeBruijn [] . unClosedTerm
+    from = ClosedTerm . fromDeBruijn [] . DeBruijn.unClosedTerm
 
   genMutant = fmap ClosedTerm . genModifiedTerm Set.empty . unClosedTerm
 

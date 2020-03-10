@@ -61,7 +61,7 @@ spec = do
   describe "instance Genetic ClosedTerm" $ do
     let isReallyClosed = Set.null . freeVars . unClosedTerm
 
-    xit "genChildren should return closed terms" $ forAll (arbitrary >>= \m12 -> genChildren m12 >>= \m12' -> pure (m12, m12')) $ \((m1, m2), (m1', m2')) -> do
+    it "genChildren should return closed terms" $ forAll (arbitrary >>= \m12 -> genChildren m12 >>= \m12' -> pure (m12, m12')) $ \((m1, m2), (m1', m2')) -> do
       m1  `shouldSatisfy` isReallyClosed
       m2  `shouldSatisfy` isReallyClosed
       m1' `shouldSatisfy` isReallyClosed
