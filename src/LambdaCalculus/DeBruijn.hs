@@ -18,9 +18,10 @@ import Control.Monad.Trans.State.Strict (State, runState, state)
 import Data.Conduit ((.|), ConduitT, runConduitPure)
 import Data.List (elemIndex)
 import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.Maybe (fromMaybe)
 import Data.Tuple (swap)
 import Data.Tuple.Extra (dupe)
-import LambdaCalculus.Genetic (Genetic)
+import LambdaCalculus.Genetic (Genetic, genChildren)
 import LambdaCalculus.Term (at)
 import Numeric.Natural (Natural)
 import GHC.Generics (Generic)
@@ -215,14 +216,25 @@ instance Ixed ClosedTerm where
   ix i f = fmap ClosedTerm . ix i f . unClosedTerm
 
 instance Genetic ClosedTerm where
-  genChildren (parent1, parent2) = do
-    i1 <- Q.choose (0, countTerm (unClosedTerm parent1) - 1)
-    i2 <- Q.choose (0, countTerm (unClosedTerm parent2) - 1)
-    let sub1 = preview (ix i1) parent1
-        sub2 = preview (ix i2) parent2
-        child1 = maybe id (set (ix i1)) sub2 $ parent1
-        child2 = maybe id (set (ix i2)) sub1 $ parent2
-    pure (child1, child2)
+  genChildren p12@(ClosedTerm parent1, ClosedTerm parent2) = do
+    i1 <- Q.choose (0, countTerm parent1 - 1)
+    i2 <- Q.choose (0, countTerm parent2 - 1)
+    let sub1 = preview (ixBound' i1) parent1
+        sub2 = preview (ixBound' i2) parent2
+        child1 = maybe id (set (ix i1) . boundTerm) sub2 $ parent1
+        child2 = maybe id (set (ix i2) . boundTerm) sub1 $ parent2
+    -- retry if not swappable TODO implement without retrying
+    if fromMaybe False $ swappable <$> sub1 <*> sub2
+      then pure (ClosedTerm child1, ClosedTerm child2)
+      else genChildren p12
+    where
+    ixBound' :: Int -> Traversal' Term BoundTerm
+    ixBound' i f = ixBound i (fmap boundTerm . f)
+    -- for terms to be closed after swapping, the number of free variables in
+    -- swapped sub-terms must not increase.
+    -- the certain set of inequal equations reduces to this simple one.
+    swappable :: BoundTerm -> BoundTerm -> Bool
+    swappable m n = boundNum m == boundNum n
 
   genMutant = fmap ClosedTerm . genModifiedTerm 0 . unClosedTerm
 
