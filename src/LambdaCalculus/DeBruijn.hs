@@ -22,7 +22,7 @@ import Data.Maybe (fromMaybe)
 import Data.Tuple (swap)
 import Data.Tuple.Extra (dupe)
 import LambdaCalculus.Genetic (Genetic, genChildren)
-import LambdaCalculus.Term (at)
+import LambdaCalculus.Term.Types (at)
 import Numeric.Natural (Natural)
 import GHC.Generics (Generic)
 import Test.QuickCheck (Arbitrary, Gen)
@@ -30,7 +30,7 @@ import Test.QuickCheck (Arbitrary, Gen)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
 import qualified LambdaCalculus.Genetic
-import qualified LambdaCalculus.Term as Term
+import qualified LambdaCalculus.Term.Types as Term
 import qualified Test.QuickCheck as Q
 
 data Term
