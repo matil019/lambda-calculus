@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -116,6 +117,14 @@ countTerm :: Term -> Int
 countTerm (Var _) = 1
 countTerm (Abs m) = 1 + countTerm m
 countTerm (App m n) = 1 + countTerm m + countTerm n
+
+-- | Is this 'Term' closed (i.e. has no free variables)?
+isClosed :: Term -> Bool
+isClosed = go 0
+  where
+  go !bound (Var x) = x <= bound
+  go !bound (Abs m) = go (bound+1) m
+  go !bound (App m n) = go bound m && go bound n
 
 -- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
 -- traversed in depth-first, pre-order.
