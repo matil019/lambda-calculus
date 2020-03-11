@@ -187,7 +187,7 @@ reduceBeta m = m
 
 reduceStep :: Term -> Maybe Term
 reduceStep (Var _) = Nothing
-reduceStep (Abs _ _) = Nothing
+reduceStep (Abs x m) = Abs x <$> reduceStep m
 reduceStep m@(App (Abs _ _) _) = Just $ reduceBeta m
 reduceStep (App m n) = case reduceStep m of
   Just m' -> Just $ App m' n
@@ -198,14 +198,12 @@ reduceSteps = C.unfold (fmap dupe . reduceStep)
 
 interpretChurchNumber :: Term -> Maybe Natural
 interpretChurchNumber = \m ->
-  go $
-    let m' = App (App m (Var "+")) (Var "0")
-    in
-    runConduitPure
-        $ reduceSteps m'
-       .| C.take 1000
-       .| C.takeWhile ((<= 1000000) . countTerm)
-       .| C.lastDef m'
+  let m' = runConduitPure
+         $ reduceSteps m
+        .| C.take 1000
+        .| C.takeWhile ((<= 1000000) . countTerm)
+        .| C.lastDef m
+  in go $ reduceBeta $ App (reduceBeta (App m' (Var "+"))) (Var "0")
   where
   go (Var "0") = Just 0
   go (App (Var "+") n) = fmap (1+) $ go n
