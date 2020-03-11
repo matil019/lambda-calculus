@@ -64,7 +64,7 @@ newtype Result = Result [(Natural, Natural, Maybe Natural)]
   deriving (Eq, Ord, Show)
 
 resultScore :: Result -> Int
-resultScore (Result xs) = sum $ map (\(a, b, r) -> btoi (Just (a + b) == r)) xs
+resultScore (Result xs) = sum $ map (\(a, b, r) -> btoi (Just (a - b) == r)) xs
   where
   btoi True  = 1
   btoi False = 0
@@ -167,11 +167,11 @@ main = do
     f a b = interpretChurchNumber (App (App m (encodeChurchNumber a)) (encodeChurchNumber b))
     probs =
       [ (0, 0)
-      , (0, 1)
       , (1, 0)
       , (1, 1)
-      , (1, 2)
       , (2, 0)
       , (2, 1)
       , (2, 2)
+      , (3, 1)
+      , (3, 2)
       ]
