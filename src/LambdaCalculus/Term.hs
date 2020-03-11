@@ -196,7 +196,7 @@ reduceStep (App m n) = case reduceStep m of
 reduceSteps :: Monad m => Term -> ConduitT i Term m ()
 reduceSteps = C.unfold (fmap dupe . reduceStep)
 
-interpretChurchNumber :: Term -> Maybe Int
+interpretChurchNumber :: Term -> Maybe Natural
 interpretChurchNumber = \m ->
   go $
     let m' = App (App m (Var "+")) (Var "0")

@@ -60,11 +60,11 @@ zipWithIndexC = loop 0
         C.yield (a, i)
         loop $! i + 1
 
-data Result = Result [(Natural, Natural, Maybe Int)]
+newtype Result = Result [(Natural, Natural, Maybe Natural)]
   deriving (Eq, Ord, Show)
 
 resultScore :: Result -> Int
-resultScore (Result xs) = sum $ map (\(a, b, r) -> btoi (Just (fromIntegral (a + b)) == r)) xs
+resultScore (Result xs) = sum $ map (\(a, b, r) -> btoi (Just (a + b) == r)) xs
   where
   btoi True  = 1
   btoi False = 0
