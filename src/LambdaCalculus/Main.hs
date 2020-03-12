@@ -36,12 +36,13 @@ import LambdaCalculus.Term
   , pattern App
   )
 import Numeric.Natural (Natural)
+import System.Environment (getArgs)
 import System.IO (BufferMode(LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
 import System.Random (split)
 import System.Time.Extra (Seconds, duration)
 import Test.QuickCheck (arbitrary)
 import Test.QuickCheck.Gen (Gen, unGen)
-import Test.QuickCheck.Random (QCGen, newQCGen)
+import Test.QuickCheck.Random (QCGen, mkQCGen, newQCGen)
 import Text.Printf (printf)
 
 import qualified Control.Monad.Reader as Reader
@@ -90,9 +91,16 @@ data Event
 main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
+  seed <- do
+    args <- getArgs
+    case args of
+      [] -> pure Nothing
+      (a:_) -> Just <$> readIO a
   mask $ \restoreMask -> do
     exref <- newIORef Nothing
-    qcgenVar <- newTVarIO =<< newQCGen
+    qcgenVar <- newTVarIO =<< case seed of
+      Just i -> pure $ mkQCGen i
+      Nothing -> newQCGen
     best <- flip runReaderT qcgenVar
        $ runConduit
        $ C.catchC (geneAlgo .| C.mapM (\a -> liftIO $ restoreMask $ pure a))
