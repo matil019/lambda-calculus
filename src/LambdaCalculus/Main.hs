@@ -17,7 +17,7 @@ import Control.Exception (SomeException, mask, throwIO)
 import Control.Monad (replicateM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, runReaderT)
-import Data.Conduit ((.|), ConduitT, runConduit)
+import Data.Conduit ((.|), ConduitT, runConduit, runConduitPure)
 import Data.Foldable (for_, traverse_)
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List (intercalate, sortOn)
@@ -32,6 +32,7 @@ import LambdaCalculus.Term
   , encodeChurchNumber
   , formatTerm
   , interpretChurchNumber
+  , reduceSteps
   , unClosedTerm
   , pattern App
   )
@@ -188,7 +189,18 @@ main = do
   runTerm :: Term -> Result
   runTerm m = Result $ map (\(a, b) -> (a, b, f a b)) probs
     where
-    f a b = interpretChurchNumber (App (App m (encodeChurchNumber a)) (encodeChurchNumber b))
+    -- reduce the term before applying church numerals (for performance)
+    m' = runConduitPure
+       $ reduceSteps m
+      .| C.take 100
+      .| C.takeWhile ((<= 1000000) . countTerm)
+      .| C.lastDef m
+    f a b = interpretChurchNumber $ runConduitPure
+       $ reduceSteps m''
+      .| C.take 1000
+      .| C.takeWhile ((<= 1000000) . countTerm)
+      .| C.lastDef m''
+      where m'' = App (App m' (encodeChurchNumber a)) (encodeChurchNumber b)
     probs =
       [ (0, 0)
       , (1, 0)

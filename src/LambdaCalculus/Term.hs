@@ -14,7 +14,7 @@ import Data.Semigroup ((<>))
 
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal', ix)
-import Data.Conduit ((.|), ConduitT, runConduitPure)
+import Data.Conduit (ConduitT)
 import Data.List (find)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Set (Set)
@@ -199,14 +199,10 @@ reduceStep (App m n) = case reduceStep m of
 reduceSteps :: Monad m => Term -> ConduitT i Term m ()
 reduceSteps = C.unfold (fmap dupe . reduceStep)
 
+-- | Interprets a lambda term as a Church numeral. The term must be fully reduced.
 interpretChurchNumber :: Term -> Maybe Natural
 interpretChurchNumber = \m ->
-  let m' = runConduitPure
-         $ reduceSteps m
-        .| C.take 1000
-        .| C.takeWhile ((<= 1000000) . countTerm)
-        .| C.lastDef m
-  in go $ reduceBeta $ App (reduceBeta (App m' (Var "+"))) (Var "0")
+  go $ reduceBeta $ App (reduceBeta (App m (Var "+"))) (Var "0")
   where
   go (Var "0") = Just 0
   go (App (Var "+") n) = fmap (1+) $ go n
