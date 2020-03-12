@@ -38,7 +38,7 @@ import LambdaCalculus.Term
   )
 import Numeric.Natural (Natural)
 import System.Environment (getArgs)
-import System.IO (BufferMode(LineBuffering), hFlush, hPutStrLn, hSetBuffering, stderr, stdout)
+import System.IO (BufferMode(LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
 import System.Random (split)
 import System.Time.Extra (Seconds, duration)
 import Test.QuickCheck (arbitrary)
@@ -113,7 +113,6 @@ main = do
            )
       .| C.last
     for_ best $ \(m, score) -> do
-      hFlush stdout
       hPutStrLn stderr $ "final best score: " <> show score
       hPutStrLn stderr $ formatTerm $ unClosedTerm m
     traverse_ throwIO =<< readIORef exref
