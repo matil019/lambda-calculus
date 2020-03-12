@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
@@ -11,9 +12,11 @@ module LambdaCalculus.Main where
 import Data.Semigroup ((<>))
 #endif
 
+import Control.Concurrent.STM (TVar, atomically, newTVarIO, stateTVar)
 import Control.Exception (SomeException, mask, throwIO)
 import Control.Monad (replicateM)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Reader (MonadReader, runReaderT)
 import Data.Conduit ((.|), ConduitT, runConduit)
 import Data.Foldable (for_, traverse_)
 import Data.IORef (newIORef, readIORef, writeIORef)
@@ -34,10 +37,14 @@ import LambdaCalculus.Term
   )
 import Numeric.Natural (Natural)
 import System.IO (BufferMode(LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
+import System.Random (split)
 import System.Time.Extra (Seconds, duration)
 import Test.QuickCheck (arbitrary)
+import Test.QuickCheck.Gen (Gen, unGen)
+import Test.QuickCheck.Random (QCGen, newQCGen)
 import Text.Printf (printf)
 
+import qualified Control.Monad.Reader as Reader
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
@@ -48,6 +55,13 @@ average xs = sum xs / realToFrac (length xs)
 
 log10 :: Double -> Double
 log10 x = log x / log 10
+
+-- | Run 'unGen' with a split 'QCGen'.
+runGen :: (MonadIO m, MonadReader (TVar QCGen) m) => Int -> Gen a -> m a
+runGen size gen = do
+  qcgenVar <- Reader.ask
+  qcgen <- liftIO $ atomically $ stateTVar qcgenVar split
+  pure $ unGen gen qcgen size
 
 zipWithIndexC :: Monad m => ConduitT a (a, Int) m ()
 zipWithIndexC = loop 0
@@ -78,8 +92,10 @@ main = do
   hSetBuffering stdout LineBuffering
   mask $ \restoreMask -> do
     exref <- newIORef Nothing
-    best <- runConduit
-       $ C.catchC (geneAlgo .| C.mapM (\a -> restoreMask $ pure a))
+    qcgenVar <- newTVarIO =<< newQCGen
+    best <- flip runReaderT qcgenVar
+       $ runConduit
+       $ C.catchC (geneAlgo .| C.mapM (\a -> liftIO $ restoreMask $ pure a))
            (\e -> liftIO $ writeIORef exref (Just (e :: SomeException)))
       .| iterPrintEvent
       .| C.concatMap (\evt -> case evt of
@@ -92,7 +108,7 @@ main = do
       hPutStrLn stderr $ formatTerm $ unClosedTerm m
     traverse_ throwIO =<< readIORef exref
   where
-  iterPrintEvent :: ConduitT Event Event IO ()
+  iterPrintEvent :: MonadIO m => ConduitT Event Event m ()
   iterPrintEvent = loop (0 :: Int) (0 :: Int)
     where
     loop !runIdx !genIdx = do
@@ -125,18 +141,18 @@ main = do
   -- Here, ConduitT is used like the Writer monad; the procedure is described with
   -- monadic binding, whereas the progress is written (by 'yield') to downstream so
   -- that it can be handled outside.
-  geneAlgo :: ConduitT i Event IO r
+  geneAlgo :: (MonadIO m, MonadReader (TVar QCGen) m) => ConduitT i Event m r
   geneAlgo = do
-    terms <- liftIO $ Q.generate $ replicateM numPopulation arbitrary
+    terms <- runGen 30 $ replicateM numPopulation arbitrary
     -- POPUlation
     popu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
     C.yield $ GenEvent popu
     loop popu
     where
     loop prevPopu = do
-      terms <- liftIO $ Q.generate $ newGeneration $ map (\(m, score) -> Individual m (scoreToWeight score)) prevPopu
+      terms <- runGen 30 $ newGeneration $ map (\(m, score) -> Individual m (scoreToWeight score)) prevPopu
       nextPopu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
-      mergedPopu <- liftIO $ Q.generate $ do
+      mergedPopu <- runGen 30 $ do
         let bothPopu = sortOn (\(_, score) -> Down score) (nextPopu <> prevPopu)
             numElite = numPopulation * 2 `div` 5
             numRandom = numPopulation - numElite
@@ -152,7 +168,7 @@ main = do
 
     numPopulation = 1000
 
-    runMeasureYield :: ClosedTerm -> ConduitT i (Term, Result, Double, Seconds) IO (ClosedTerm, Double)
+    runMeasureYield :: MonadIO m => ClosedTerm -> ConduitT i (Term, Result, Double, Seconds) m (ClosedTerm, Double)
     runMeasureYield m = do
       (time, (result, score)) <- liftIO $ duration $ do
         let !result = runTerm $ unClosedTerm m

@@ -31,6 +31,9 @@ library
                      , deepseq
                      , extra
                      , lens
+                     , mtl
+                     , random
+                     , stm
                      , transformers
   hs-source-dirs:      src
   default-language:    Haskell2010
