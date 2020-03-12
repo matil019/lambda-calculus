@@ -190,14 +190,14 @@ main = do
   runTerm m = Result $ map (\(a, b) -> (a, b, f a b)) probs
     where
     -- reduce the term before applying church numerals (for performance)
-    m' = runConduitPure
+    (m', numReduces) = runConduitPure
        $ reduceSteps m
-      .| C.take 100
+      .| C.take 1000
       .| C.takeWhile ((<= 1000000) . countTerm)
-      .| C.lastDef m
+      .| C.getZipSink ((,) <$> C.ZipSink (C.lastDef m) <*> C.ZipSink C.length)
     f a b = interpretChurchNumber $ runConduitPure
        $ reduceSteps m''
-      .| C.take 1000
+      .| C.take (1000 - numReduces)
       .| C.takeWhile ((<= 1000000) . countTerm)
       .| C.lastDef m''
       where m'' = App (App m' (encodeChurchNumber a)) (encodeChurchNumber b)
