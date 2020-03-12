@@ -12,9 +12,11 @@ module LambdaCalculus.Main where
 import Data.Semigroup ((<>))
 #endif
 
+import Control.Concurrent.Async (async, wait)
 import Control.Concurrent.STM (TVar, atomically, newTVarIO, stateTVar)
+import Control.Concurrent.STM.TMQueue (closeTMQueue, newTMQueueIO, readTMQueue, writeTMQueue)
 import Control.Exception (SomeException, mask, throwIO)
-import Control.Monad (replicateM)
+import Control.Monad (join, replicateM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, runReaderT)
 import Data.Conduit ((.|), ConduitT, runConduit, runConduitPure)
@@ -45,6 +47,7 @@ import Test.QuickCheck (arbitrary)
 import Test.QuickCheck.Gen (Gen, unGen)
 import Test.QuickCheck.Random (QCGen, mkQCGen, newQCGen)
 import Text.Printf (printf)
+import UnliftIO.Async (pooledMapConcurrently)
 
 import qualified Control.Monad.Reader as Reader
 import qualified Data.Conduit as C
@@ -65,6 +68,13 @@ runGen size gen = do
   qcgen <- liftIO $ atomically $ stateTVar qcgenVar split
   pure $ unGen gen qcgen size
 
+unNoneTerminateC :: Monad m => ConduitT (Maybe a) a m ()
+unNoneTerminateC = do
+  mma <- C.await
+  for_ (join mma) $ \a -> do
+    C.yield a
+    unNoneTerminateC
+
 zipWithIndexC :: Monad m => ConduitT a (a, Int) m ()
 zipWithIndexC = loop 0
   where
@@ -75,6 +85,17 @@ zipWithIndexC = loop 0
       Just a -> do
         C.yield (a, i)
         loop $! i + 1
+
+pooledMapConcurrentlyC :: (MonadIO m, Traversable t) => (a -> ConduitT () o IO r) -> t a -> ConduitT i o m (t r)
+pooledMapConcurrentlyC f as = do
+  q <- liftIO newTMQueueIO
+  let producer a = runConduit $ f a `C.fuseUpstream` C.mapM_ (liftIO . atomically . writeTMQueue q)
+  asy <- liftIO $ async $ do
+    rs <- pooledMapConcurrently producer as
+    atomically $ closeTMQueue q
+    pure rs
+  C.repeatM (liftIO $ atomically $ readTMQueue q) .| unNoneTerminateC
+  liftIO $ wait asy
 
 newtype Result = Result [(Natural, Natural, Maybe Natural)]
   deriving (Eq, Ord, Show)
@@ -154,13 +175,13 @@ main = do
   geneAlgo = do
     terms <- runGen 30 $ replicateM numPopulation arbitrary
     -- POPUlation
-    popu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
+    popu <- pooledMapConcurrentlyC (\term -> runMeasureYield term `C.fuseUpstream` C.map RunEvent) terms
     C.yield $ GenEvent popu
     loop popu
     where
     loop prevPopu = do
       terms <- runGen 30 $ newGeneration $ map (\(m, score) -> Individual m (scoreToWeight score)) prevPopu
-      nextPopu <- traverse runMeasureYield terms `C.fuseUpstream` C.map RunEvent
+      nextPopu <- pooledMapConcurrentlyC (\term -> runMeasureYield term `C.fuseUpstream` C.map RunEvent) terms
       mergedPopu <- runGen 30 $ do
         let bothPopu = sortOn (\(_, score) -> Down score) (nextPopu <> prevPopu)
             numElite = numPopulation * 2 `div` 5
