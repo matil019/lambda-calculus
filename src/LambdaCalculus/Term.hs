@@ -24,7 +24,7 @@ import LambdaCalculus.DeBruijn (fromDeBruijn, toDeBruijn)
 import LambdaCalculus.Genetic (Genetic, genChildren)
 import LambdaCalculus.Term.Types
 import Numeric.Natural (Natural)
-import Test.QuickCheck (Arbitrary, Gen)
+import Test.QuickCheck (Arbitrary, Gen, shrink)
 
 import qualified Data.Conduit.Combinators as C
 import qualified Data.List as List
@@ -133,6 +133,9 @@ newtype ClosedTerm = ClosedTerm { unClosedTerm :: Term }
 
 instance Arbitrary ClosedTerm where
   arbitrary = ClosedTerm <$> genTerm Set.empty
+  shrink (ClosedTerm (Var _)) = []
+  shrink (ClosedTerm (Abs x m)) = map (ClosedTerm . Abs x . unClosedTerm) $ shrink (ClosedTerm m) -- cheat by abusing ClosedTerm TODO test that shrunk terms are closed
+  shrink (ClosedTerm (App m n)) = [ClosedTerm m, ClosedTerm n]
 
 instance Ixed ClosedTerm where
   ix :: Int -> Traversal' ClosedTerm Term
