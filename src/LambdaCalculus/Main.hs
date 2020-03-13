@@ -35,6 +35,7 @@ import LambdaCalculus.Term
   , encodeChurchNumber
   , formatTerm
   , interpretChurchNumber
+  , interpretChurchPair
   , reduceSteps
   , unClosedTerm
   , pattern App
@@ -98,15 +99,17 @@ pooledMapConcurrentlyC f as = do
   C.repeatM (liftIO $ atomically $ readTMQueue q) .| unNoneTerminateC
   liftIO $ wait asy
 
-newtype Result = Result [(Natural, Natural, Maybe Natural)]
+newtype Result = Result [(Natural, Natural, (Maybe Natural, Maybe Natural))]
   deriving (Eq, Ord, Show)
 
 resultScore :: Result -> Int
 resultScore (Result xs) = sum $ flip map xs
-  $ \(a, b, r) -> case r of
-    Just rj | rj == a - b -> 2
-            | otherwise -> 1
-    Nothing -> 0
+  $ \(a, b, (r1, r2)) -> justEq (a + b) r1 + justEq (a - b) r2
+  where
+  justEq r (Just m)
+    | m == r = 2
+    | otherwise = 1
+  justEq _ Nothing = 0
 
 data Event
   = RunEvent (Term, Result, Double, Seconds)
@@ -212,18 +215,20 @@ main = do
   runTerm :: Term -> Result
   runTerm m = Result $ map (\(a, b) -> (a, b, f a b)) probs
     where
-    -- reduce the term before applying church numerals (for performance)
-    (m', numReduces) = runConduitPure
-       $ reduceSteps m
-      .| C.take 1000
-      .| C.takeWhile ((<= 1000) . countTerm)
-      .| C.getZipSink ((,) <$> C.ZipSink (C.lastDef m) <*> C.ZipSink C.length)
-    f a b = interpretChurchNumber $ runConduitPure
-       $ reduceSteps m''
-      .| C.take (1000 - numReduces)
-      .| C.takeWhile ((<= 1000) . countTerm)
-      .| C.lastDef m''
-      where m'' = App (App m' (encodeChurchNumber a)) (encodeChurchNumber b)
+    redu x = runConduitPure
+        $ reduceSteps x
+       .| C.take 1000
+       .| C.takeWhile ((<= 1000) . countTerm)
+       .| C.lastDef x
+    (mfst', msnd') =
+      let (mfst, msnd) = interpretChurchPair $ redu m
+      in (redu mfst, redu msnd)
+    f a b =
+      ( interpretChurchNumber $ redu $ apply mfst'
+      , interpretChurchNumber $ redu $ apply msnd'
+      )
+      where
+      apply x = App (App x (encodeChurchNumber a)) (encodeChurchNumber b)
     probs =
       [ (0, 0)
       , (1, 0)
