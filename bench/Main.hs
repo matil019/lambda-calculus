@@ -4,6 +4,8 @@ import Control.Monad (replicateM)
 import Control.Monad.Trans.State.Strict (State, evalState)
 import Criterion.Main
 import Data.Conduit ((.|), runConduitPure)
+import Data.Maybe (catMaybes, mapMaybe)
+import Data.Traversable (for)
 import Numeric.Natural (Natural)
 import LambdaCalculus.Term
 
@@ -30,23 +32,34 @@ reduceTermS m = do
   State.put (remainingSteps - n)
   pure result
 
-apply :: Term -> Term
-apply m = App (App m (encodeChurchNumber 2)) (encodeChurchNumber 1)
+apply :: (Natural, Natural) -> Term -> Term
+apply (a, b) m = App (App m (encodeChurchNumber a)) (encodeChurchNumber b)
+
+probs :: [(Natural, Natural)]
+probs =
+  [ (0, 0)
+  , (1, 0)
+  , (2, 1)
+  , (5, 3)
+  ]
 
 -- | A naive implementation which reduces a term after applying numerals.
-reduce :: Term -> Maybe Natural
-reduce m = interpretChurchNumber $ reduceTerm $ apply m
+reduce :: Term -> [Natural]
+reduce m = mapMaybe (interpretChurchNumber . reduceTerm . flip apply m) probs
 
 -- | A two-fold implementation which reduces a term before and after applying numerals.
-reduce2 :: Term -> Maybe Natural
-reduce2 m = interpretChurchNumber $ reduceTerm $ apply $ reduceTerm m
+reduce2 :: Term -> [Natural]
+reduce2 m = mapMaybe (interpretChurchNumber . reduceTerm . flip apply (reduceTerm m)) probs
 
 -- | Like 'reduce2' but keeps the _total_ number of steps under a certain limit.
-reduce3 :: Term -> Maybe Natural
-reduce3 m = flip evalState 1000 $ do
-  m' <- reduceTermS m
-  m'' <- reduceTermS $ apply m'
-  pure $ interpretChurchNumber m''
+reduce3 :: Term -> [Natural]
+reduce3 = flip evalState (length probs * 1000) . go
+  where
+  go m = do
+    m' <- reduceTermS m
+    fmap catMaybes $ for probs $ \prob -> do
+      m'' <- reduceTermS $ apply prob m'
+      pure $ interpretChurchNumber m''
 
 main :: IO ()
 main = defaultMain
