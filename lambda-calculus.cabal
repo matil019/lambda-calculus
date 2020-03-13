@@ -65,3 +65,15 @@ test-suite unittest
   hs-source-dirs:      test/unittest
   default-language:    Haskell2010
   ghc-options:         -Wall -fdefer-typed-holes
+
+benchmark termbench
+  type:                exitcode-stdio-1.0
+  main-is:             Main.hs
+  build-depends:       lambda-calculus, base
+                     , QuickCheck
+                     , conduit
+                     , criterion
+                     , transformers
+  hs-source-dirs:      bench
+  default-language:    Haskell2010
+  ghc-options:         -Wall -fdefer-typed-holes
