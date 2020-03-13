@@ -203,7 +203,7 @@ main = do
     runMeasureYield m = do
       (time, (result, score)) <- liftIO $ duration $ do
         let !result = runTerm $ unClosedTerm m
-            !score = realToFrac (resultScore result) - log10 (realToFrac $ countTerm $ unClosedTerm m) / 10
+            !score = realToFrac (resultScore result) - sqrt (realToFrac $ countTerm $ unClosedTerm m) / 10
         pure $! (result, score)
       C.yield (unClosedTerm m, result, score, time)
       pure (m, score)
