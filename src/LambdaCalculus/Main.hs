@@ -101,10 +101,11 @@ newtype Result = Result [(Natural, Natural, Maybe Natural)]
   deriving (Eq, Ord, Show)
 
 resultScore :: Result -> Int
-resultScore (Result xs) = sum $ map (\(a, b, r) -> btoi (Just (a - b) == r)) xs
-  where
-  btoi True  = 1
-  btoi False = 0
+resultScore (Result xs) = sum $ flip map xs
+  $ \(a, b, r) -> case r of
+    Just rj | rj == a - b -> 2
+            | otherwise -> 1
+    Nothing -> 0
 
 data Event
   = RunEvent (Term, Result, Double, Seconds)
