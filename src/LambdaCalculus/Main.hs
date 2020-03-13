@@ -20,6 +20,7 @@ import Control.Exception (SomeException, mask, throwIO)
 import Control.Monad (join, replicateM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, runReaderT)
+import Control.Monad.Trans.State.Strict (State, evalState)
 import Data.Conduit ((.|), ConduitT, runConduit, runConduitPure)
 import Data.Foldable (for_, traverse_)
 import Data.IORef (newIORef, readIORef, writeIORef)
@@ -27,6 +28,7 @@ import Data.List (intercalate, sortOn)
 import Data.List.Extra (maximumOn)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Ord (Down(Down))
+import Data.Traversable (for)
 import LambdaCalculus.Genetic (Individual(Individual), newGeneration)
 import LambdaCalculus.Term
   ( ClosedTerm
@@ -52,6 +54,7 @@ import Text.Printf (printf)
 import UnliftIO.Async (pooledMapConcurrently)
 
 import qualified Control.Monad.Reader as Reader
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
@@ -213,22 +216,28 @@ main = do
       pure score
 
   runTerm :: Term -> Result
-  runTerm m = Result $ map (\(a, b) -> (a, b, f a b)) probs
+  runTerm m = flip evalState (length probs * 1000) $ do
+    m' <- redu m
+    let (mfst, msnd) = interpretChurchPair m'
+    mfst' <- redu mfst
+    msnd' <- redu msnd
+    fmap Result $ for probs $ \(a, b) -> do
+      let apply x = App (App x (encodeChurchNumber a)) (encodeChurchNumber b)
+      a' <- fmap interpretChurchNumber $ redu $ apply mfst'
+      b' <- fmap interpretChurchNumber $ redu $ apply msnd'
+      pure (a, b, (a', b'))
     where
-    redu x = runConduitPure
-        $ reduceSteps x
-       .| C.take 1000
-       .| C.takeWhile ((<= 1000) . countTerm)
-       .| C.lastDef x
-    (mfst', msnd') =
-      let (mfst, msnd) = interpretChurchPair $ redu m
-      in (redu mfst, redu msnd)
-    f a b =
-      ( interpretChurchNumber $ redu $ apply mfst'
-      , interpretChurchNumber $ redu $ apply msnd'
-      )
-      where
-      apply x = App (App x (encodeChurchNumber a)) (encodeChurchNumber b)
+    redu :: Term -> State Int Term
+    redu x = do
+      remainingSteps <- State.get
+      let (result, n) = runConduitPure
+             $ reduceSteps x
+            .| C.take remainingSteps
+            .| C.takeWhile ((<= 1000) . countTerm)
+            .| C.getZipSink ((,) <$> C.ZipSink (C.lastDef x) <*> C.ZipSink C.length)
+      State.put (remainingSteps - n)
+      pure result
+
     probs =
       [ (0, 0)
       , (1, 0)
