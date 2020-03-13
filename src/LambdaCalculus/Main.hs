@@ -6,6 +6,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 module LambdaCalculus.Main where
 
 #if !MIN_VERSION_base(4,11,0)
@@ -101,10 +102,11 @@ newtype Result = Result [(Natural, Natural, Maybe Natural)]
   deriving (Eq, Ord, Show)
 
 resultScore :: Result -> Int
-resultScore (Result xs) = sum $ map (\(a, b, r) -> btoi (Just (a - b) == r)) xs
-  where
-  btoi True  = 1
-  btoi False = 0
+resultScore (Result xs) = sum $ flip map xs
+  $ \(a, b, r) -> case r of
+    Just rj | rj == a - b -> 2
+            | otherwise -> 1
+    Nothing -> 0
 
 data Event
   = RunEvent (Term, Result, Double, Seconds)
@@ -175,13 +177,13 @@ main = do
   geneAlgo = do
     terms <- runGen 30 $ replicateM numPopulation arbitrary
     -- POPUlation
-    popu <- pooledMapConcurrentlyC (\term -> runMeasureYield term `C.fuseUpstream` C.map RunEvent) terms
+    popu <- pooledMapConcurrentlyC (\term -> (term,) <$> runMeasureYield term) terms
     C.yield $ GenEvent popu
     loop popu
     where
     loop prevPopu = do
       terms <- runGen 30 $ newGeneration $ map (\(m, score) -> Individual m (scoreToWeight score)) prevPopu
-      nextPopu <- pooledMapConcurrentlyC (\term -> runMeasureYield term `C.fuseUpstream` C.map RunEvent) terms
+      nextPopu <- pooledMapConcurrentlyC (\term -> (term,) <$> runMeasureYield term) terms
       mergedPopu <- runGen 30 $ do
         let bothPopu = sortOn (\(_, score) -> Down score) (nextPopu <> prevPopu)
             numElite = numPopulation * 2 `div` 5
@@ -198,14 +200,14 @@ main = do
 
     numPopulation = 1000
 
-    runMeasureYield :: MonadIO m => ClosedTerm -> ConduitT i (Term, Result, Double, Seconds) m (ClosedTerm, Double)
+    runMeasureYield :: MonadIO m => ClosedTerm -> ConduitT i Event m Double
     runMeasureYield m = do
       (time, (result, score)) <- liftIO $ duration $ do
         let !result = runTerm $ unClosedTerm m
-            !score = realToFrac (resultScore result) - log10 (realToFrac $ countTerm $ unClosedTerm m) / 10
+            !score = realToFrac (resultScore result) - sqrt (realToFrac $ countTerm $ unClosedTerm m) / 10
         pure $! (result, score)
-      C.yield (unClosedTerm m, result, score, time)
-      pure (m, score)
+      C.yield $ RunEvent (unClosedTerm m, result, score, time)
+      pure score
 
   runTerm :: Term -> Result
   runTerm m = Result $ map (\(a, b) -> (a, b, f a b)) probs
