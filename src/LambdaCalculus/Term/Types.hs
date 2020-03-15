@@ -28,7 +28,7 @@ data TermRaw
   | AppRaw Term Term  -- ^ An application
   deriving (Eq, Generic, NFData, Show)
 
--- | A lambda termRaw and its metadata.
+-- | A lambda term and its metadata.
 data Term = Term
   { termRaw :: TermRaw
   , freeVars :: Set Var

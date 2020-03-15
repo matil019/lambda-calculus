@@ -4,9 +4,10 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-module LambdaCalculus.DeBruijn where
+module LambdaCalculus.DeBruijn2 where
 
 #if !MIN_VERSION_base(4,11,0)
 import Data.Semigroup ((<>))
@@ -33,11 +34,62 @@ import qualified LambdaCalculus.Genetic
 import qualified LambdaCalculus.Term.Types as Term
 import qualified Test.QuickCheck as Q
 
-data Term
-  = Var Int        -- ^ A variable (starts at @1@)
-  | Abs Term       -- ^ An abstraction
-  | App Term Term  -- ^ An application
+data TermRaw
+  = VarRaw Int        -- ^ A variable (starts at @1@)
+  | AbsRaw Term       -- ^ An abstraction
+  | AppRaw Term Term  -- ^ An application
   deriving (Eq, Generic, NFData, Show)
+
+-- | A lambda term and its metadata.
+data Term = Term
+  { termRaw :: TermRaw
+  -- | @0@ indicates this term is closed.
+  , freeDepth :: Int
+  , countTerm :: Int
+  }
+  deriving (Eq, Generic, NFData, Show)
+
+-- | A smart constructor which matches 'termRaw' and handles other fields transparently.
+pattern Var :: Int -> Term
+pattern Var x <- Term { termRaw = VarRaw x }
+  where
+  Var x = Term
+    { termRaw = VarRaw x
+    , freeDepth = x
+    , countTerm = 1
+    }
+
+-- | A smart constructor which matches 'termRaw' and handles other fields transparently.
+pattern Abs :: Term -> Term
+pattern Abs m <- Term { termRaw = AbsRaw m }
+  where
+  Abs m = Term
+    { termRaw = AbsRaw m
+    , freeDepth =
+        let Term{freeDepth=fm} = m
+        in max 0 $ fm - 1
+    , countTerm =
+        let Term{countTerm=sm} = m
+        in 1 + sm
+    }
+
+-- | A smart constructor which matches 'termRaw' and handles other fields transparently.
+pattern App :: Term -> Term -> Term
+pattern App m n <- Term { termRaw = AppRaw m n }
+  where
+  App m n = Term
+    { termRaw = AppRaw m n
+    , freeDepth =
+        let Term{freeDepth=fm} = m
+            Term{freeDepth=fn} = n
+        in max fm fn
+    , countTerm =
+        let Term{countTerm=sm} = m
+            Term{countTerm=sn} = n
+        in 1 + sm + sn
+    }
+
+{-# COMPLETE Var, Abs, App #-}
 
 -- | Traverses sub-terms in depth-first, pre-order.
 --
@@ -114,18 +166,9 @@ formatTerm (Var x) = show x
 formatTerm (Abs m) = "(\\ " <> formatTerm m <> ")"
 formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 
-countTerm :: Term -> Int
-countTerm (Var _) = 1
-countTerm (Abs m) = 1 + countTerm m
-countTerm (App m n) = 1 + countTerm m + countTerm n
-
 -- | Is this 'Term' closed (i.e. has no free variables)?
 isClosed :: Term -> Bool
-isClosed = go 0
-  where
-  go !bound (Var x) = x <= bound
-  go !bound (Abs m) = go (bound+1) m
-  go !bound (App m n) = go bound m && go bound n
+isClosed m = freeDepth m == 0
 
 -- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
 -- traversed in depth-first, pre-order.
