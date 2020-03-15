@@ -279,3 +279,9 @@ genChurchNumber = Abs . Abs <$> genTerm 2
 
 encodeChurchNumber :: Natural -> Term
 encodeChurchNumber n = Abs $ Abs $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
+
+interpretChurchPair :: Term -> (Term, Term)
+interpretChurchPair m =
+  ( App m (Abs (Abs (Var 2)))
+  , App m (Abs (Abs (Var 1)))
+  )
