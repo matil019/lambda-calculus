@@ -6,7 +6,6 @@ import Criterion.Main
 import qualified Bench.DeBruijn as DeBruijn
 import qualified Bench.DeBruijn2 as DeBruijn2
 import qualified Bench.Term as Term
-import qualified Bench.Term2 as Term2
 import qualified LambdaCalculus.DeBruijn as DeBruijn
 import qualified LambdaCalculus.Term as Term
 import qualified Test.QuickCheck as Q
@@ -33,13 +32,6 @@ main = defaultMain
         [ bench "reduce"  $ nf (map DeBruijn2.reduce)  terms'
         , bench "reduce2" $ nf (map DeBruijn2.reduce2) terms'
         , bench "reduce3" $ nf (map DeBruijn2.reduce3) terms'
-        ]
-      , let terms' = map Term2.fromTerm1 terms
-        in
-        bgroup "Term2"
-        [ bench "reduce"  $ nf (map Term2.reduce)  terms'
-        , bench "reduce2" $ nf (map Term2.reduce2) terms'
-        , bench "reduce3" $ nf (map Term2.reduce3) terms'
         ]
       ]
   ]
