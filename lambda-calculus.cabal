@@ -70,7 +70,8 @@ test-suite unittest
 benchmark termbench
   type:                exitcode-stdio-1.0
   main-is:             Main.hs
-  other-modules:       Bench.DeBruijn
+  other-modules:       Bench.Class
+                       Bench.DeBruijn
                        Bench.DeBruijn2
                        Bench.Term
   build-depends:       lambda-calculus, base

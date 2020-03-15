@@ -3,11 +3,11 @@ module Main where
 import Control.Monad (replicateM)
 import Criterion.Main
 
+import qualified Bench.Class as Class
 import qualified Bench.DeBruijn as DeBruijn
 import qualified Bench.DeBruijn2 as DeBruijn2
 import qualified Bench.Term as Term
 import qualified LambdaCalculus.DeBruijn as DeBruijn
-import qualified LambdaCalculus.Term as Term
 import qualified Test.QuickCheck as Q
 
 main :: IO ()
@@ -32,6 +32,11 @@ main = defaultMain
         [ bench "reduce"  $ nf (map DeBruijn2.reduce)  terms'
         , bench "reduce2" $ nf (map DeBruijn2.reduce2) terms'
         , bench "reduce3" $ nf (map DeBruijn2.reduce3) terms'
+        ]
+      , bgroup "IsTerm Term"
+        [ bench "reduce"  $ nf (map Class.reduce)  terms
+        , bench "reduce2" $ nf (map Class.reduce2) terms
+        , bench "reduce3" $ nf (map Class.reduce3) terms
         ]
       ]
   ]
