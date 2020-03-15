@@ -189,7 +189,7 @@ main = do
       nextPopu <- pooledMapConcurrentlyC (\term -> (term,) <$> runMeasureYield term) terms
       mergedPopu <- runGen 30 $ do
         let bothPopu = sortOn (\(_, score) -> Down score) (nextPopu <> prevPopu)
-            numElite = numPopulation * 2 `div` 5
+            numElite = numPopulation `div` 5
             numRandom = numPopulation - numElite
             (elitePopu, badPopu) = splitAt numElite bothPopu
         randomPopu <-
