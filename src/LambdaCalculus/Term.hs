@@ -213,3 +213,9 @@ genChurchNumber = Abs "f" . Abs "x" <$> genTerm (Set.fromList ["f", "x"])
 
 encodeChurchNumber :: Natural -> Term
 encodeChurchNumber n = Abs "f" $ Abs "x" $ iterate (App (Var "f")) (Var "x") !! fromIntegral n
+
+interpretChurchPair :: Term -> (Term, Term)
+interpretChurchPair m =
+  ( App m (Abs "x" (Abs "y" (Var "x")))
+  , App m (Abs "x" (Abs "y" (Var "y")))
+  )
