@@ -24,6 +24,7 @@ library
                        LambdaCalculus.Main
                        LambdaCalculus.Term
                        LambdaCalculus.Term.Types
+                       LambdaCalculus.Term2
   -- other-modules:
   build-depends:       base >=4.9 && <4.14
                      , QuickCheck
@@ -73,6 +74,7 @@ benchmark termbench
   other-modules:       Bench.DeBruijn
                        Bench.DeBruijn2
                        Bench.Term
+                       Bench.Term2
   build-depends:       lambda-calculus, base
                      , QuickCheck
                      , conduit
