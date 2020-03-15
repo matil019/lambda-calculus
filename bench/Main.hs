@@ -14,7 +14,6 @@ benches terms =
   [ bench "reduce"  $ nf (map reduce)  terms
   , bench "reduce2" $ nf (map reduce2) terms
   , bench "reduce3" $ nf (map reduce3) terms
-  , bench "reduce4" $ nf (map reduce4) terms
   ]
 
 main :: IO ()
