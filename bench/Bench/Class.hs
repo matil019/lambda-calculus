@@ -1,8 +1,10 @@
 module Bench.Class where
 
+import Control.Monad.ST (ST, runST)
 import Control.Monad.Trans.State.Strict (State, evalState)
 import Data.Conduit ((.|), ConduitT, runConduitPure)
 import Data.Maybe (catMaybes, mapMaybe)
+import Data.STRef (STRef, newSTRef, readSTRef, writeSTRef)
 import Data.Traversable (for)
 import Numeric.Natural (Natural)
 
@@ -63,6 +65,17 @@ reduceTermS m = do
   State.put (remainingSteps - n)
   pure result
 
+reduceTermST :: IsTerm a => STRef s Int -> a -> ST s a
+reduceTermST remainingStepsRef m = do
+  remainingSteps <- readSTRef remainingStepsRef
+  let (result, n) = runConduitPure
+         $ reduceSteps m
+        .| C.take remainingSteps
+        .| C.takeWhile ((<= 1000) . countTerm)
+        .| C.getZipSink ((,) <$> C.ZipSink (C.lastDef m) <*> C.ZipSink C.length)
+  writeSTRef remainingStepsRef (remainingSteps - n)
+  pure result
+
 applyChurchNumber :: IsTerm a => (Natural, Natural) -> a -> a
 applyChurchNumber (a, b) m = mkApp (mkApp m (encodeChurchNumber a)) (encodeChurchNumber b)
 
@@ -97,3 +110,16 @@ reduce3 = flip evalState (length probs * 1000) . go
       pure $ interpretChurchNumber m''
 
 {-# INLINABLE reduce3 #-}
+
+-- | Like 'reduce3' but implemented with 'ST' instead of 'State'.
+reduce4 :: IsTerm a => a -> [Natural]
+reduce4 m = runST go
+  where
+  go = do
+    remainingStepsRef <- newSTRef (length probs * 1000)
+    m' <- reduceTermST remainingStepsRef m
+    fmap catMaybes $ for probs $ \prob -> do
+      m'' <- reduceTermST remainingStepsRef $ applyChurchNumber prob m'
+      pure $ interpretChurchNumber m''
+
+{-# INLINABLE reduce4 #-}
