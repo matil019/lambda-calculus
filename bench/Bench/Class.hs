@@ -6,10 +6,12 @@ import Data.Maybe (catMaybes, mapMaybe)
 import Data.Traversable (for)
 import Numeric.Natural (Natural)
 
-import qualified Bench.Term as Term
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
+import qualified LambdaCalculus.DeBruijn as DeBruijn
+import qualified LambdaCalculus.DeBruijn2 as DeBruijn2
+import qualified LambdaCalculus.Term as Term
 
 class IsTerm a where
   mkApp :: a -> a -> a
@@ -28,6 +30,20 @@ instance IsTerm Term.Term where
   interpretChurchNumber = Term.interpretChurchNumber
   reduceSteps = Term.reduceSteps
   countTerm = Term.countTerm
+
+instance IsTerm DeBruijn.Term where
+  mkApp = DeBruijn.App
+  encodeChurchNumber = DeBruijn.encodeChurchNumber
+  interpretChurchNumber = DeBruijn.interpretChurchNumber
+  reduceSteps = DeBruijn.reduceSteps
+  countTerm = DeBruijn.countTerm
+
+instance IsTerm DeBruijn2.Term where
+  mkApp = DeBruijn2.App
+  encodeChurchNumber = DeBruijn2.encodeChurchNumber
+  interpretChurchNumber = DeBruijn2.interpretChurchNumber
+  reduceSteps = DeBruijn2.reduceSteps
+  countTerm = DeBruijn2.countTerm
 
 reduceTerm :: IsTerm a => a -> a
 reduceTerm m = runConduitPure
