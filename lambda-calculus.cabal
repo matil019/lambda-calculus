@@ -19,6 +19,7 @@ extra-source-files:  CHANGELOG.md
 
 library
   exposed-modules:     LambdaCalculus.DeBruijn
+                       LambdaCalculus.DeBruijn2
                        LambdaCalculus.Genetic
                        LambdaCalculus.Main
                        LambdaCalculus.Term
@@ -70,6 +71,7 @@ benchmark termbench
   type:                exitcode-stdio-1.0
   main-is:             Main.hs
   other-modules:       Bench.DeBruijn
+                       Bench.DeBruijn2
                        Bench.Term
   build-depends:       lambda-calculus, base
                      , QuickCheck

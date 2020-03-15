@@ -4,6 +4,7 @@ import Control.Monad (replicateM)
 import Criterion.Main
 
 import qualified Bench.DeBruijn as DeBruijn
+import qualified Bench.DeBruijn2 as DeBruijn2
 import qualified Bench.Term as Term
 import qualified LambdaCalculus.DeBruijn as DeBruijn
 import qualified LambdaCalculus.Term as Term
@@ -24,6 +25,13 @@ main = defaultMain
         [ bench "reduce"  $ nf (map DeBruijn.reduce)  terms'
         , bench "reduce2" $ nf (map DeBruijn.reduce2) terms'
         , bench "reduce3" $ nf (map DeBruijn.reduce3) terms'
+        ]
+      , let terms' = map (snd . DeBruijn2.toDeBruijn []) terms
+        in -- TODO make sure that DeBruijn terms actually reduce the same as the other notation
+        bgroup "DeBruijn2"
+        [ bench "reduce"  $ nf (map DeBruijn2.reduce)  terms'
+        , bench "reduce2" $ nf (map DeBruijn2.reduce2) terms'
+        , bench "reduce3" $ nf (map DeBruijn2.reduce3) terms'
         ]
       ]
   ]
