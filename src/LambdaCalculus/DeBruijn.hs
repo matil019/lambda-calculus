@@ -15,7 +15,7 @@ import Data.Semigroup ((<>))
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix, preview, set)
 import Control.Monad.Trans.State.Strict (State, runState, state)
-import Data.Conduit ((.|), ConduitT, runConduitPure)
+import Data.Conduit (ConduitT)
 import Data.List (elemIndex)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (fromMaybe)
@@ -256,7 +256,7 @@ reduceBeta m = m
 
 reduceStep :: Term -> Maybe Term
 reduceStep (Var _) = Nothing
-reduceStep (Abs _) = Nothing
+reduceStep (Abs m) = Abs <$> reduceStep m
 reduceStep m@(App (Abs _) _) = Just $ reduceBeta m
 reduceStep (App m n) = case reduceStep m of
   Just m' -> Just $ App m' n
@@ -265,16 +265,10 @@ reduceStep (App m n) = case reduceStep m of
 reduceSteps :: Monad m => Term -> ConduitT i Term m ()
 reduceSteps = C.unfold (fmap dupe . reduceStep)
 
-interpretChurchNumber :: Term -> Maybe Int
+-- | Interprets a lambda term as a Church numeral. The term must be fully reduced.
+interpretChurchNumber :: Term -> Maybe Natural
 interpretChurchNumber = \m ->
-  go $
-    let m' = App (App m (Var 2)) (Var 1)
-    in
-    runConduitPure
-       $ reduceSteps m'
-      .| C.take 1000
-      .| C.takeWhile ((<= 1000000) . countTerm)
-      .| C.lastDef m'
+  go $ reduceBeta $ App (reduceBeta (App m (Var 2))) (Var 1)
   where
   go (Var 1) = Just 0
   go (App (Var 2) n) = fmap (1+) $ go n
