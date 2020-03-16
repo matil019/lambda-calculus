@@ -71,32 +71,25 @@ runGen size gen = do
   pure $ unGen gen qcgen size
 
 unNoneTerminateC :: Monad m => ConduitT (Maybe a) a m ()
-unNoneTerminateC = do
-  mma <- C.await
-  whenJust (join mma) $ \a -> do
-    C.yield a
-    unNoneTerminateC
+unNoneTerminateC = whenJustM (join <$> C.await) $ \a -> do
+  C.yield a
+  unNoneTerminateC
 
 iterPerMC :: Monad m => Int -> (a -> m ()) -> ConduitT a a m ()
 iterPerMC period f = loop
   where
   period_1 = period - 1
-  loop = do
-    whenJustM C.await $ \a -> do
-      C.yield a .| C.iterM f
-      C.take period_1
-      loop
+  loop = whenJustM C.await $ \a -> do
+    C.yield a .| C.iterM f
+    C.take period_1
+    loop
 
 zipWithIndexC :: Monad m => ConduitT a (a, Int) m ()
 zipWithIndexC = loop 0
   where
-  loop i = do
-    ma <- C.await
-    case ma of
-      Nothing -> pure ()
-      Just a -> do
-        C.yield (a, i)
-        loop $! i + 1
+  loop !i = whenJustM C.await $ \a -> do
+    C.yield (a, i)
+    loop (i + 1)
 
 pooledMapConcurrentlyC :: (MonadIO m, Traversable t) => (a -> ConduitT () o IO r) -> t a -> ConduitT i o m (t r)
 pooledMapConcurrentlyC f as = do
@@ -158,28 +151,27 @@ main = do
   iterPrintEvent :: MonadIO m => ConduitT Event Event m ()
   iterPrintEvent = loop (0 :: Int) (0 :: Int)
     where
-    loop !runIdx !genIdx = do
-      whenJustM C.await $ \evt -> case evt of
-        RunEvent (term, _, score, time) -> do
-          liftIO $ putStrLn $ formatLabeled
-            [ ("#gen",  show genIdx)
-            , ("#step", show runIdx)
-            , ("score", printf "%.03f" score)
-            , ("size",  show $ countTerm term)
-            , ("time",  printf "%.4f" time)
-            ]
-          C.yield evt
-          loop (runIdx + 1) genIdx
-        GenEvent popu -> do
-          let ne0 f = maybe 0 f . nonEmpty
-          liftIO $ putStrLn $ formatLabeled
-            [ ("generation", show genIdx)
-            , ("score best", printf "%.03f" $ ne0 maximum $ map (\(_, score) -> score) popu)
-            , ("score avg",  printf "%.03f" $ ne0 average $ map (\(_, score) -> score) popu)
-            , ("size avg",   printf "%.03f" $ ne0 average $ map (\(m, _) -> realToFrac $ countTerm $ unClosedTerm m) popu)
-            ]
-          C.yield evt
-          loop runIdx (genIdx + 1)
+    loop !runIdx !genIdx = whenJustM C.await $ \evt -> case evt of
+      RunEvent (term, _, score, time) -> do
+        liftIO $ putStrLn $ formatLabeled
+          [ ("#gen",  show genIdx)
+          , ("#step", show runIdx)
+          , ("score", printf "%.03f" score)
+          , ("size",  show $ countTerm term)
+          , ("time",  printf "%.4f" time)
+          ]
+        C.yield evt
+        loop (runIdx + 1) genIdx
+      GenEvent popu -> do
+        let ne0 f = maybe 0 f . nonEmpty
+        liftIO $ putStrLn $ formatLabeled
+          [ ("generation", show genIdx)
+          , ("score best", printf "%.03f" $ ne0 maximum $ map (\(_, score) -> score) popu)
+          , ("score avg",  printf "%.03f" $ ne0 average $ map (\(_, score) -> score) popu)
+          , ("size avg",   printf "%.03f" $ ne0 average $ map (\(m, _) -> realToFrac $ countTerm $ unClosedTerm m) popu)
+          ]
+        C.yield evt
+        loop runIdx (genIdx + 1)
 
   formatLabeled :: [(String, String)] -> String
   formatLabeled = intercalate ", " . map (\(k, v) -> k <> ": " <> v)
