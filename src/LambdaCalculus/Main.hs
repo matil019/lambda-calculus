@@ -19,10 +19,10 @@ import Control.Concurrent.STM.TMQueue (closeTMQueue, newTMQueueIO, readTMQueue, 
 import Control.Exception (SomeException, mask, throwIO)
 import Control.Lens (both, over)
 import Control.Monad (join, replicateM)
+import Control.Monad.Extra (whenJust, whenJustM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, runReaderT)
 import Data.Conduit ((.|), ConduitT, runConduit, runConduitPure)
-import Data.Foldable (for_, traverse_)
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List (intercalate, sortOn)
 import Data.List.Extra (maximumOn)
@@ -73,7 +73,7 @@ runGen size gen = do
 unNoneTerminateC :: Monad m => ConduitT (Maybe a) a m ()
 unNoneTerminateC = do
   mma <- C.await
-  for_ (join mma) $ \a -> do
+  whenJust (join mma) $ \a -> do
     C.yield a
     unNoneTerminateC
 
@@ -82,8 +82,7 @@ iterPerMC period f = loop
   where
   period_1 = period - 1
   loop = do
-    ma <- C.await
-    for_ ma $ \a -> do
+    whenJustM C.await $ \a -> do
       C.yield a .| C.iterM f
       C.take period_1
       loop
@@ -151,17 +150,16 @@ main = do
       .| iterPerMC 1000 (\(m, score) -> liftIO $ putStrLn $
            "current best score: " <> show score <> ", term: " <> formatTerm (unClosedTerm m))
       .| C.last
-    for_ best $ \(m, score) -> do
+    whenJust best $ \(m, score) -> do
       hPutStrLn stderr $ "final best score: " <> show score
       hPutStrLn stderr $ formatTerm $ unClosedTerm m
-    traverse_ throwIO =<< readIORef exref
+    whenJustM (readIORef exref) throwIO
   where
   iterPrintEvent :: MonadIO m => ConduitT Event Event m ()
   iterPrintEvent = loop (0 :: Int) (0 :: Int)
     where
     loop !runIdx !genIdx = do
-      mevt <- C.await
-      for_ mevt $ \evt -> case evt of
+      whenJustM C.await $ \evt -> case evt of
         RunEvent (term, _, score, time) -> do
           liftIO $ putStrLn $ formatLabeled
             [ ("#gen",  show genIdx)
