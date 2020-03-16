@@ -77,6 +77,17 @@ unNoneTerminateC = do
     C.yield a
     unNoneTerminateC
 
+iterPerMC :: Monad m => Int -> (a -> m ()) -> ConduitT a a m ()
+iterPerMC period f = loop
+  where
+  period_1 = period - 1
+  loop = do
+    ma <- C.await
+    for_ ma $ \a -> do
+      C.yield a .| C.iterM f
+      C.take period_1
+      loop
+
 zipWithIndexC :: Monad m => ConduitT a (a, Int) m ()
 zipWithIndexC = loop 0
   where
@@ -137,6 +148,8 @@ main = do
            RunEvent _ -> Nothing
            GenEvent popu -> fmap (maximumOn (\(_, score) -> score) . NE.toList) $ nonEmpty popu
            )
+      .| iterPerMC 1000 (\(m, score) -> liftIO $ putStrLn $
+           "current best score: " <> show score <> ", term: " <> formatTerm (unClosedTerm m))
       .| C.last
     for_ best $ \(m, score) -> do
       hPutStrLn stderr $ "final best score: " <> show score
