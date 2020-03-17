@@ -273,6 +273,35 @@ typeOf ctx (App m n) = do
   guard $ s == u
   pure t
 
+-- The algorithm uses this made-up rule. TODO prove this
+--
+-- > Γ, x:s |- e => t
+-- > ------------------------
+-- > Γ |- \(x:s). e => s -> t
+--
+-- Because we don't have "an annotated term". With our datatypes only the
+-- parameter of 'Abs' can be annotated, but not the whole term.
+bidirectionalTypeSynth
+  :: [Type] -- ^ typing context: @type of (Var x) == ctx !! (x-1)@
+  -> Term
+  -> Maybe Type
+bidirectionalTypeSynth ctx (Var x) = at (x-1) ctx
+bidirectionalTypeSynth _ (Const t _) = pure (BaseType t)
+bidirectionalTypeSynth ctx (Abs mt m) = mt >>= \t -> bidirectionalTypeSynth (t:ctx) m >>= pure . (t :->)
+bidirectionalTypeSynth ctx (App m n) = do
+  s :-> t <- bidirectionalTypeSynth ctx m
+  guard $ bidirectionalTypeCheck ctx s n
+  pure t
+
+bidirectionalTypeCheck
+  :: [Type] -- ^ typing context: @type of (Var x) == ctx !! (x-1)@
+  -> Type   -- ^ type to check against
+  -> Term
+  -> Bool
+bidirectionalTypeCheck ctx t m | Just t == bidirectionalTypeSynth ctx m = True
+bidirectionalTypeCheck ctx (s :-> t) (Abs _ m) = bidirectionalTypeCheck (s:ctx) t m
+bidirectionalTypeCheck _ _ _ = False
+
 -- | A well-typed 'Term'. (i.e. a Term which has been typechecked)
 --
 -- When you see a function taking 'WTerm' as an argument, it assumes that
