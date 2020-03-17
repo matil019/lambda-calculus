@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -35,6 +36,12 @@ data Type
   = BaseType BaseType
   | FuncType Type Type
   deriving (Eq, Generic, NFData, Show)
+
+-- | A synonym for 'FuncType'.
+pattern (:->) :: Type -> Type -> Type
+pattern t :-> u = FuncType t u
+
+{-# COMPLETE BaseType, (:->) #-}
 
 formatType :: Type -> String
 formatType (BaseType bt) = bt
