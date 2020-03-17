@@ -40,6 +40,7 @@ data Type
 -- | A synonym for 'FuncType'.
 pattern (:->) :: Type -> Type -> Type
 pattern t :-> u = FuncType t u
+infixr 1 :->
 
 {-# COMPLETE BaseType, (:->) #-}
 
