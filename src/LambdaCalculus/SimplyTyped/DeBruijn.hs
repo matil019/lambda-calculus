@@ -177,7 +177,7 @@ genTerm types constants freeNum = do
           Q.frequency [(p, genVar), (q, genAbs), (q, genApp)]
       | otherwise -> do
           let p = 10000 * (size + 2) `div` (6 * size)
-              q = 10000 - p
+              q = (10000 - 2 * p) `div` 2
           Q.frequency [(p, genConst), (p, genVar), (q, genAbs), (q, genApp)]
   where
   -- 1 term
