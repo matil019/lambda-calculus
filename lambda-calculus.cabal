@@ -22,6 +22,7 @@ library
                        LambdaCalculus.Genetic
                        LambdaCalculus.InfList
                        LambdaCalculus.Main
+                       LambdaCalculus.SimplyTyped.DeBruijn
                        LambdaCalculus.Term
                        LambdaCalculus.Term.Types
                        LambdaCalculus.Utils
