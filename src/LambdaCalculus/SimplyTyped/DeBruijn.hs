@@ -270,9 +270,16 @@ typeOf ctx (App m n) = do
   guard $ s == u
   pure t
 
+-- | A well-typed 'Term'. (i.e. a Term which has been typechecked)
+--
+-- When you see a function taking 'WTerm' as an argument, it assumes that
+-- the term is well-typed.
+type WTerm = Term
+
 -- | The list must be infinite. TODO add a newtype
 --
--- This function does *not* consider types! See 'typeOf'. TODO add a newtype? (after typecheck, untyped Term type may be reused)
+-- This function does *not* consider types, because substitution is an
+-- independent of typing.
 substitute :: [Term] -> Term -> Term
 substitute _ m@(Const _ _) = m
 substitute s (Var x) = s !! (x-1)
@@ -283,15 +290,12 @@ substitute s (Abs t m) = Abs t (substitute (Var 1 : map (\i -> substitute s' (Va
   shift = substitute (map Var [2..])
 
 -- | Beta reduction.
---
--- This function does *not* consider types! See 'typeOf'.
-reduceBeta :: Term -> Term
+reduceBeta :: WTerm -> WTerm
 reduceBeta (App (Abs _ m) n) = substitute (n:map Var [1..]) m
 reduceBeta m = m
 
--- This function does *not* consider types! See 'typeOf'.
 -- TODO take advantage of the strongly normalizing property and optimize
-reduceStep :: Term -> Maybe Term
+reduceStep :: WTerm -> Maybe WTerm
 reduceStep (Const _ _) = Nothing
 reduceStep (Var _) = Nothing
 reduceStep (Abs t m) = Abs t <$> reduceStep m
@@ -304,7 +308,7 @@ reduceSteps :: Monad m => Term -> ConduitT i Term m ()
 reduceSteps = C.unfold (fmap dupe . reduceStep)
 
 -- | Interprets a lambda term as a Church numeral. The term must be fully reduced.
-interpretChurchNumber :: Term -> Maybe Natural
+interpretChurchNumber :: WTerm -> Maybe Natural
 interpretChurchNumber = \m ->
   go $ reduceBeta $ App (reduceBeta (App m (Var 2))) (Var 1)
   where
@@ -312,7 +316,7 @@ interpretChurchNumber = \m ->
   go (App (Var 2) n) = fmap (1+) $ go n
   go _ = Nothing
 
-encodeChurchNumber :: Type -> Natural -> Term
+encodeChurchNumber :: Type -> Natural -> WTerm
 encodeChurchNumber t n =
   Abs (FuncType t t) $ Abs t $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
 
@@ -332,7 +336,7 @@ encodeChurchNumber t n =
 -- TODO add type variables and/or type inference to lift this restriction
 --
 -- TODO add a newtype which indicates a term is known to be well-typed and has that type
-interpretChurchPair :: Term -> Maybe (Term, Term)
+interpretChurchPair :: WTerm -> Maybe (Term, Term)
 interpretChurchPair m = case typeOf [] m of
   Just ((a :-> b :-> _) :-> _) ->
     let first  = Abs ((a :-> b :-> a) :-> a) $ App (Var 1) (Abs a $ Abs b $ Var 2)
