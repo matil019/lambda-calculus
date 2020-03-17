@@ -318,24 +318,25 @@ encodeChurchNumber t n =
 
 -- | @interpretChurchPair m@ assumes @m@ to be a Church pair and extracts their elements.
 --
--- @m@ is typechecked against the type @(a -> b -> c) -> r@ and if it doesn't,
--- @Nothing@ is returned.
+-- A Church-encoded pair has a type @(a -> b -> c) -> c@ where @c@ is either @a@ or @b@.
+-- @m@ is typechecked against it and if it doesn't, @Nothing@ is returned.
 --
 -- Note that if @Just (x, y)@ is returned, @x@ and/or @y@ may not typecheck.
--- For both of them to typecheck, the types @a@, @b@, and @c@ above must coincide
--- because the tuple type is absent (this is Simply Typed Lambda Calculus, in which
--- the only type constructor is the function type @->@).
+--
+-- As of now, for both of elements to typecheck, the types @a@, and @b@ above must
+-- coincide. The reason is that 'Abs' requires an explicit type annotation. This rules
+-- out terms whose types can change over context. @c@ must necessarily be fixed to
+-- either @a@ or @b@ on typecheck.
 -- So it may be a better idea to consider 'interpretChurchPair' as a function which
--- returns a _list_ whose length is up to 2, rather than 2-tuple.
+-- returns a _list_ whose length is up to 2, rather than a 2-tuple.
+-- TODO add type variables and/or type inference to lift this restriction
 --
 -- TODO add a newtype which indicates a term is known to be well-typed and has that type
--- TODO according to Wikipedia, product types can be encoded with (->). look for another encoding for pairs
 interpretChurchPair :: Term -> Maybe (Term, Term)
 interpretChurchPair m = case typeOf [] m of
-  Just (FuncType (FuncType a (FuncType b _c)) _) ->
-    -- _c is either a or b but we don't care
-    Just
-    ( App m (Abs a (Abs b (Var 2)))
-    , App m (Abs a (Abs b (Var 1)))
-    )
+  Just ((a :-> b :-> _) :-> _) ->
+    let first  = Abs ((a :-> b :-> a) :-> a) $ App (Var 1) (Abs a $ Abs b $ Var 2)
+        second = Abs ((a :-> b :-> b) :-> b) $ App (Var 1) (Abs a $ Abs b $ Var 1)
+    in
+    Just (App first m, App second m)
   _ -> Nothing
