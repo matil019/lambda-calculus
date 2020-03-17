@@ -193,17 +193,7 @@ genTerm types constants freeNum = do
     t <- Q.liftArbitrary $ Q.elements $ NE.toList types
     Abs t <$> genTerm types constants (freeNum+1)
   -- 2X + 1 terms
-  genApp = do
-    m <- genTerm types constants freeNum
-    n <- genTerm types constants freeNum
-    case m of
-      -- "correct" the parameter type if possible
-      Abs _ e
-        | let ctx = []  -- TODO collect typing context over recursion
-        , Just t <- bidirectionalTypeSynth ctx n
-          -> pure $ App (Abs (Just t) e) n
-      -- if not, pretend nothing happened
-      _   -> pure $ App m n
+  genApp = App <$> genTerm types constants freeNum <*> genTerm types constants freeNum
 
 -- | Generates a modified 'Term'.
 --
