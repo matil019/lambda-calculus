@@ -53,7 +53,7 @@ formatType (FuncType t u) =
 
 data Term
   = Var Int                -- ^ A variable (starts at @1@)
-  | Abs Type Term          -- ^ An abstraction with an explicit type annotation
+  | Abs (Maybe Type) Term  -- ^ An abstraction with an optional explicit type annotation
   | App Term Term          -- ^ An application
   | Const BaseType String  -- ^ A constant
   deriving (Eq, Generic, NFData, Show)
@@ -76,7 +76,9 @@ type instance IxValue Term = Term
 formatTerm :: Term -> String
 formatTerm (Var x) = show x
 formatTerm (Const _ x) = x
-formatTerm (Abs t m) = "(\\[" <> formatType t <> "] " <> formatTerm m <> ")"
+formatTerm (Abs t m) =
+  let ts = maybe "" (\s -> "[" <> formatType s <> "]") t
+  in "(\\" <> ts <> " " <> formatTerm m <> ")"
 formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 
 formatTermWithType :: [Type] -> Term -> String
@@ -186,7 +188,7 @@ genTerm types constants freeNum = do
   genVar = Var <$> Q.choose (1, freeNum)
   -- X + 1 terms
   genAbs = do
-    t <- Q.elements $ NE.toList types
+    t <- Q.liftArbitrary $ Q.elements $ NE.toList types
     Abs t <$> genTerm types constants (freeNum+1)
   -- 2X + 1 terms
   genApp = App <$> genTerm types constants freeNum <*> genTerm types constants freeNum
@@ -255,7 +257,7 @@ instance TypeSet a => Genetic (ClosedTerm a) where
         0
     . unClosedTerm
 
--- | Context: type of (Var x) == ctx !! (x-1)
+-- | A simple type checker which requires that all 'Abs' have type annotations.
 -- TODO write tests
 typeOf
   :: [Type] -- ^ typing context: @type of (Var x) == ctx !! (x-1)@
@@ -263,7 +265,7 @@ typeOf
   -> Maybe Type
 typeOf ctx (Var x) = at (x-1) ctx
 typeOf _ (Const t _) = pure (BaseType t)
-typeOf ctx (Abs t m) = fmap (FuncType t) $ typeOf (t:ctx) m
+typeOf ctx (Abs mt m) = mt >>= \t -> typeOf (t:ctx) m >>= pure . FuncType t
 typeOf ctx (App m n) = do
   FuncType s t <- typeOf ctx m
   u <- typeOf ctx n
@@ -318,7 +320,7 @@ interpretChurchNumber = \m ->
 
 encodeChurchNumber :: Type -> Natural -> WTerm
 encodeChurchNumber t n =
-  Abs (FuncType t t) $ Abs t $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
+  Abs (Just (t :-> t)) $ Abs (Just t) $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
 
 -- | @interpretChurchPair m@ assumes @m@ to be a Church pair and extracts their elements.
 --
@@ -339,8 +341,8 @@ encodeChurchNumber t n =
 interpretChurchPair :: WTerm -> Maybe (Term, Term)
 interpretChurchPair m = case typeOf [] m of
   Just ((a :-> b :-> _) :-> _) ->
-    let first  = Abs ((a :-> b :-> a) :-> a) $ App (Var 1) (Abs a $ Abs b $ Var 2)
-        second = Abs ((a :-> b :-> b) :-> b) $ App (Var 1) (Abs a $ Abs b $ Var 1)
+    let first  = Abs (Just ((a :-> b :-> a) :-> a)) $ App (Var 1) (Abs (Just a) $ Abs (Just b) $ Var 2)
+        second = Abs (Just ((a :-> b :-> b) :-> b)) $ App (Var 1) (Abs (Just a) $ Abs (Just b) $ Var 1)
     in
     Just (App first m, App second m)
   _ -> Nothing
