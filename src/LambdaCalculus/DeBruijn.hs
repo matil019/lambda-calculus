@@ -2,8 +2,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -204,6 +204,7 @@ genTerm freeNum = do
   size <- max 1 <$> Q.getSize
   if freeNum >= 1
     then do
+      -- TODO calculate p and q only once (benchmark)
       let p = 10000 * (size + 2) `div` (3 * size)
           q = (10000 - p) `div` 2
       Q.frequency [(p, genVar), (q, genAbs), (q, genApp)]
@@ -233,6 +234,9 @@ instance Ixed ClosedTerm where
   ix :: Int -> Traversal' ClosedTerm Term
   ix i f = fmap ClosedTerm . ix i f . unClosedTerm
 
+type instance Index ClosedTerm = Int
+type instance IxValue ClosedTerm = Term
+
 instance Genetic ClosedTerm where
   genCrossover p12@(ClosedTerm parent1, ClosedTerm parent2) = do
     i1 <- Q.choose (0, countTerm parent1 - 1)
@@ -255,9 +259,6 @@ instance Genetic ClosedTerm where
     swappable m n = boundNum m == boundNum n
 
   genMutant = fmap ClosedTerm . genModifiedTerm 0 . unClosedTerm
-
-type instance Index ClosedTerm = Int
-type instance IxValue ClosedTerm = Term
 
 -- | Performs a substitution.
 --
