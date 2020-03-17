@@ -189,6 +189,7 @@ genTerm types constants freeNum = do
   genVar = Var <$> Q.choose (1, freeNum)
   -- X + 1 terms
   genAbs = do
+    -- TODO generate function-type parameter e.g. (\[o->o] \[o] 2 1)
     t <- Q.liftArbitrary $ Q.elements $ NE.toList types
     Abs t <$> genTerm types constants (freeNum+1)
   -- 2X + 1 terms
