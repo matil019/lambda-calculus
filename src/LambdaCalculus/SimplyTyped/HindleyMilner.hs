@@ -1,0 +1,69 @@
+module LambdaCalculus.SimplyTyped.HindleyMilner where
+
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Maybe (MaybeT(MaybeT))
+import Control.Monad.Trans.State.Strict (State)
+import LambdaCalculus.SimplyTyped.HindleyMilner.MGU (mgu)
+import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
+
+import qualified Control.Monad.Trans.State.Strict as State
+import qualified LambdaCalculus.SimplyTyped.HindleyMilner.MGU as MGU
+
+-- since this is the simply typed lambda calculus,
+-- let polymorphism is not used. equivalently, polytypes never appear in the result.
+-- however, indeterminate monotypes may appear. for example, @\x. x@ infers @a -> a@,
+-- where @a@ is some monotype decided by "the user".
+-- this is the Rank-1 type.
+
+-- TODO remove ForAll constructor because it is not introduced at all?
+
+-- | A counter to generate fresh variables
+type Counter = Int
+
+substMonoType :: VarType -> MonoType -> MonoType -> MonoType
+substMonoType = MGU.subst
+
+-- | TODO reuse ordinary @substitute@ functions for Terms?
+substPolyType :: VarType -> MonoType -> PolyType -> PolyType
+substPolyType x m = go []
+  where
+  go bound t | x `elem` bound = t
+  go _ (Mono t) = Mono $ substMonoType x m t
+  go bound (ForAll a t) = ForAll a $ go (a:bound) t
+
+inst :: PolyType -> State Counter MonoType
+inst (Mono t) = pure t
+inst (ForAll a t) = do
+  x <- newvar
+  inst $ substPolyType a x t
+
+newvar :: State Counter MonoType
+newvar = State.state $ \counter -> (VarType $ "a" <> show counter, counter + 1)
+
+subst :: Subst -> MonoType -> MonoType
+subst (Subst s) (VarType a) = case lookup a s of
+  Just t -> t
+  Nothing -> VarType a
+subst _ (ConstType c) = ConstType c
+subst s (t :-> t') = subst s t :-> subst s t'
+
+infer :: [(Var, PolyType)] -> Term -> MaybeT (State Counter) (MonoType, Subst)
+infer ctx (Var x) = do
+  s <- liftMaybe $ lookup x ctx
+  t <- lift $ inst s
+  pure (t, mempty)
+infer _ (Const t _) = pure (t, mempty)
+infer ctx (App e0 e1) = do
+  (t0, s0) <- infer ctx e0
+  (t1, s1) <- infer ctx e1
+  t' <- lift newvar
+  s2 <- liftMaybe $ mgu (subst s1 t0) (t1 :-> t')
+  pure $ (subst s2 t', s2 <> s1 <> s0)
+infer ctx (Abs x e) = do
+  t <- lift newvar
+  (t', s) <- infer ((x,Mono t):ctx) e
+  pure $ (subst s t :-> t', s)
+-- there is no let polymorphism
+
+liftMaybe :: Monad m => Maybe a -> MaybeT m a
+liftMaybe = MaybeT . pure

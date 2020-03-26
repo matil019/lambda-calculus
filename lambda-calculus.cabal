@@ -23,6 +23,9 @@ library
                        LambdaCalculus.InfList
                        LambdaCalculus.Main
                        LambdaCalculus.SimplyTyped.DeBruijn
+                       LambdaCalculus.SimplyTyped.HindleyMilner
+                       LambdaCalculus.SimplyTyped.HindleyMilner.MGU
+                       LambdaCalculus.SimplyTyped.HindleyMilner.Types
                        LambdaCalculus.Term
                        LambdaCalculus.Term.Types
                        LambdaCalculus.Utils
