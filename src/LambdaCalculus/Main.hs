@@ -49,7 +49,7 @@ import Test.QuickCheck (arbitrary)
 import Test.QuickCheck.Gen (Gen, unGen)
 import Test.QuickCheck.Random (QCGen, mkQCGen, newQCGen)
 import Text.Printf (printf)
-import UnliftIO.Async (pooledMapConcurrently)
+import UnliftIO (finally, pooledMapConcurrently)
 
 import qualified Control.Monad.Reader as Reader
 import qualified Data.Conduit as C
@@ -96,8 +96,7 @@ pooledMapConcurrentlyC f as = do
   q <- liftIO newTMQueueIO
   let producer a = runConduit $ f a `C.fuseUpstream` C.mapM_ (liftIO . atomically . writeTMQueue q)
   asy <- liftIO $ async $ do
-    rs <- pooledMapConcurrently producer as
-    atomically $ closeTMQueue q
+    rs <- pooledMapConcurrently producer as `finally` (atomically $ closeTMQueue q)
     pure rs
   C.repeatM (liftIO $ atomically $ readTMQueue q) .| unNoneTerminateC
   liftIO $ wait asy
