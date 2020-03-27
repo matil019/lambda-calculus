@@ -94,10 +94,9 @@ zipWithIndexC = loop 0
 pooledMapConcurrentlyC :: (MonadIO m, Traversable t) => (a -> ConduitT () o IO r) -> t a -> ConduitT i o m (t r)
 pooledMapConcurrentlyC f as = do
   q <- liftIO newTMQueueIO
-  let producer a = runConduit $ f a `C.fuseUpstream` C.mapM_ (liftIO . atomically . writeTMQueue q)
-  asy <- liftIO $ async $ do
-    rs <- pooledMapConcurrently producer as `finally` (atomically $ closeTMQueue q)
-    pure rs
+  asy <- liftIO $ async $
+    let producer a = runConduit $ f a `C.fuseUpstream` C.mapM_ (liftIO . atomically . writeTMQueue q)
+    in pooledMapConcurrently producer as `finally` (atomically $ closeTMQueue q)
   C.repeatM (liftIO $ atomically $ readTMQueue q) .| unNoneTerminateC
   liftIO $ wait asy
 
