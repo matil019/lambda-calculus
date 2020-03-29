@@ -6,6 +6,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+-- | Lambda terms in De Bruijn index notation.
 module LambdaCalculus.DeBruijn where
 
 #if !MIN_VERSION_base(4,11,0)
@@ -33,8 +34,9 @@ import qualified LambdaCalculus.Genetic
 import qualified LambdaCalculus.Term.Types as Term
 import qualified Test.QuickCheck as Q
 
+-- | A lambda term in De Bruijn index notation.
 data Term
-  = Var Int        -- ^ A variable (starts at @1@)
+  = Var Int        -- ^ A variable (must start at @1@)
   | Abs Term       -- ^ An abstraction
   | App Term Term  -- ^ An application
   deriving (Eq, Generic, NFData, Show)
@@ -42,7 +44,10 @@ data Term
 -- | Traverses sub-terms in depth-first, pre-order.
 --
 -- This is consistent with 'index':
--- > preview (ix i) == Just (index i)
+--
+-- @
+-- 'preview' ('ix' i) == 'Just' ('index' i)
+-- @
 --
 -- See also 'ixBound'.
 --
@@ -57,7 +62,7 @@ type instance IxValue Term = Term
 -- | A term with additional info about its enclosing term.
 data BoundTerm = BoundTerm
   { boundTerm :: Term
-  -- | @boundTerm == Var x@ is bound if @x <= boundNum@.
+  -- | A variable @x@ is bound if @boundTerm == Var x@ and @x <= boundNum@.
   , boundNum :: Int
   }
   deriving (Eq, Generic, NFData, Show)
@@ -85,11 +90,13 @@ toDeBruijn = \free -> swap . flip runState free . go []
     n' <- go bound n
     pure $ App m' n'
 
--- | The list must be long enough to have all the free variables the 'Term' refers.
+-- | Converts a De Bruijn index 'Term' into the ordinary notation.
+--
+-- The list must be long enough to have all the free variables the 'Term' refers.
 --
 -- The return value of 'toDeBruijn' can always be applied to 'fromDeBruijn'.
 --
--- *NOTE* the list must be finite! (TODO add a newtype)
+-- __NOTE__ the list must be finite! (TODO add a newtype)
 fromDeBruijn :: [Term.Var] -> Term -> Term.Term
 fromDeBruijn free = go infinitevars []
   where
@@ -109,17 +116,23 @@ fromDeBruijn free = go infinitevars []
   -- infinite list of strings, "a" : "b" : ... : "z" : "aa" : "ab" : ...
   infinitevars = filter (`notElem` free) $ concat $ iterate (\ss -> [ c:s | c <- ['a'..'z'], s <- ss ]) [ [c] | c <- ['a'..'z'] ]
 
+-- | Formats a 'Term' into a human-readable string.
+--
+-- TODO remove redundant parens
 formatTerm :: Term -> String
 formatTerm (Var x) = show x
 formatTerm (Abs m) = "(\\ " <> formatTerm m <> ")"
 formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 
+-- | Counts a number of sub-terms in a 'Term'.
 countTerm :: Term -> Int
 countTerm (Var _) = 1
 countTerm (Abs m) = 1 + countTerm m
 countTerm (App m n) = 1 + countTerm m + countTerm n
 
 -- | Is this 'Term' closed (i.e. has no free variables)?
+--
+-- TODO consider implementing this with the lenses (bench)
 isClosed :: Term -> Bool
 isClosed = go 0
   where
@@ -130,35 +143,43 @@ isClosed = go 0
 -- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
 -- traversed in depth-first, pre-order.
 --
--- The first element is always @m@.
+-- The first element is always @m@. (TODO add a test)
 --
 -- The following law holds:
 --
--- > length ('linear' m) == 'countTerm' m
+-- @
+-- length ('linear' m) == 'countTerm' m
+-- @
 linear :: Term -> NonEmpty Term
 linear m = m :| case m of
   Var _ -> []
   Abs n -> NE.toList $ linear n
   App n1 n2 -> NE.toList $ linear n1 <> linear n2
 
--- | This list can never be empty. See 'linear'
+-- | @'toList' == NonEmpty.'NE.toList' . 'linear'@
 toList :: Term -> [Term]
 toList = NE.toList . linear
 
 -- | @index i m@ traverses @m@ to find a sub-term.
 --
--- @m@ is traversed in depth-first, pre-order. @i == 0@ denotes @m@ itself.
+-- @m@ is traversed in depth-first, pre-order. @i == 0@ denotes @m@ itself. (TODO add a test)
 --
--- > index 0 m == Just m
--- > index 3 ('App' ('App' ('Var' \'x\') n) o) == Just n
+-- @
+-- index 0 m == Just m
+-- index 3 ('App' ('App' ('Var' x) m) n) == Just m
+-- @
 --
 -- Another equivalence:
--- > 'toList' m !! i == fromJust ('index' i m)
+--
+-- @
+-- 'toList' m !! i == fromJust ('index' i m)
+-- @
+--
 -- TODO add test
 index :: Int -> Term -> Maybe Term
 index i m = at i (toList m)
 
--- | 'ix @Term' with an additional info. (See 'BoundTerm')
+-- | An 'ix' for 'Term' with an additional info. (See 'BoundTerm')
 ixBound :: Int -> Traversal Term Term BoundTerm Term
 ixBound = loop 0
   where
@@ -178,8 +199,7 @@ ixBound = loop 0
 -- in a term. Note that there is no upper limit of a size of a generated term;
 -- although rare, a huge term may be generated.
 --
--- If the list is empty, @genTerm@ always generates a closed term in a form of an @'Abs' _@.
--- TODO Allow @App@ (consider the size)
+-- @genTerm 0@ always generates a closed term in a form of an @('Abs' _)@.
 genTerm :: Int -> Gen Term
 genTerm freeNum = do
   -- see LambdaCalculus.Term.genTerm for explanation of the probability
@@ -241,7 +261,11 @@ instance Genetic ClosedTerm where
 type instance Index ClosedTerm = Int
 type instance IxValue ClosedTerm = Term
 
--- | The list must be infinite. TODO add a newtype
+-- | Performs a substitution.
+--
+-- The list must be infinite. TODO add a newtype
+--
+-- You would like to use 'reduceBeta' instead of using this directly.
 substitute :: [Term] -> Term -> Term
 substitute s (Var x) = s !! (x-1)
 substitute s (App m n) = App (substitute s m) (substitute s n)
@@ -250,10 +274,14 @@ substitute s (Abs m) = Abs (substitute (Var 1 : map (\i -> substitute s' (Var i)
   s' = map shift s
   shift = substitute (map Var [2..])
 
+-- | Performs a beta-reduction.
 reduceBeta :: Term -> Term
 reduceBeta (App (Abs m) n) = substitute (n:map Var [1..]) m
 reduceBeta m = m
 
+-- | @reduceStep m@ tries to reduce a beta-redux one step.
+--
+-- If @m@ can't be reduced any more, returns @Nothing@.
 reduceStep :: Term -> Maybe Term
 reduceStep (Var _) = Nothing
 reduceStep (Abs m) = Abs <$> reduceStep m
@@ -262,10 +290,11 @@ reduceStep (App m n) = case reduceStep m of
   Just m' -> Just $ App m' n
   Nothing -> App m <$> reduceStep n
 
+-- | Repeatedly reduces ('reduceStep') a term and yields each step.
 reduceSteps :: Monad m => Term -> ConduitT i Term m ()
 reduceSteps = C.unfold (fmap dupe . reduceStep)
 
--- | Interprets a lambda term as a Church numeral. The term must be fully reduced.
+-- | Interprets a lambda term as a Church numeral. The term must be fully reduced. (TODO add a newtype)
 interpretChurchNumber :: Term -> Maybe Natural
 interpretChurchNumber = \m ->
   go $ reduceBeta $ App (reduceBeta (App m (Var 2))) (Var 1)
@@ -274,12 +303,18 @@ interpretChurchNumber = \m ->
   go (App (Var 2) n) = fmap (1+) $ go n
   go _ = Nothing
 
+{-# DEPRECATED genChurchNumber "Use encodeChurchNumber" #-}
+-- |
 genChurchNumber :: Gen Term
 genChurchNumber = Abs . Abs <$> genTerm 2
 
+-- | Encodes a natural number into a Church numeral.
 encodeChurchNumber :: Natural -> Term
 encodeChurchNumber n = Abs $ Abs $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
 
+-- | Interprets a lambda term as a Church pair.
+--
+-- The argument can be a redux. Always returns reduxes.
 interpretChurchPair :: Term -> (Term, Term)
 interpretChurchPair m =
   ( App m (Abs (Abs (Var 2)))
