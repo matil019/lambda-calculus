@@ -7,6 +7,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
+-- | The main function and utilities.
 module LambdaCalculus.Main where
 
 #if !MIN_VERSION_base(4,11,0)
@@ -57,24 +58,37 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
 import qualified Test.QuickCheck as Q
 
+-- | Calculates an average.
 average :: NonEmpty Double -> Double
 average xs = sum xs / realToFrac (length xs)
 
+-- | Calculates a common logarithm (i.e. base 10).
 log10 :: Double -> Double
 log10 x = log x / log 10
 
--- | Run 'unGen' with a split 'QCGen'.
+-- | Runs 'Gen' deterministically by splitting @QCGen@ in the reader monad.
 runGen :: (MonadIO m, MonadReader (TVar QCGen) m) => Int -> Gen a -> m a
 runGen size gen = do
   qcgenVar <- Reader.ask
   qcgen <- liftIO $ atomically $ stateTVar qcgenVar split
   pure $ unGen gen qcgen size
 
+-- | Yields 'Just's and halts at the first 'Nothing'.
 unNoneTerminateC :: Monad m => ConduitT (Maybe a) a m ()
 unNoneTerminateC = whenJustM (join <$> C.await) $ \a -> do
   C.yield a
   unNoneTerminateC
 
+-- | @iterPerMC n f@ runs @f@ for its effects every @n@ elements.
+--
+-- @
+-- 'iterPerMC' 1 == 'C.iterM'
+-- @
+--
+-- >>> runConduit $ yieldMany [1..5] .| iterPerMC 2 print .| sinkNull
+-- 1
+-- 3
+-- 5
 iterPerMC :: Monad m => Int -> (a -> m ()) -> ConduitT a a m ()
 iterPerMC period f = loop
   where
@@ -84,6 +98,7 @@ iterPerMC period f = loop
     C.take period_1
     loop
 
+-- | Zips elements with indexes, starting at 0.
 zipWithIndexC :: Monad m => ConduitT a (a, Int) m ()
 zipWithIndexC = loop 0
   where
@@ -91,6 +106,8 @@ zipWithIndexC = loop 0
     C.yield (a, i)
     loop (i + 1)
 
+-- | Runs conduits concurrently. 'pooledMapConcurrently' for 'ConduitT'.
+-- TODO take MonadUnliftIO m instead of IO
 pooledMapConcurrentlyC :: (MonadIO m, Traversable t) => (a -> ConduitT () o IO r) -> t a -> ConduitT i o m (t r)
 pooledMapConcurrentlyC f as = do
   q <- liftIO newTMQueueIO
@@ -100,9 +117,13 @@ pooledMapConcurrentlyC f as = do
   C.repeatM (liftIO $ atomically $ readTMQueue q) .| unNoneTerminateC
   liftIO $ wait asy
 
+-- | A result of evaluating a lambda term.
 newtype Result = Result [(Natural, Natural, (Maybe Natural, Maybe Natural))]
   deriving (Eq, Ord, Show)
 
+-- | Evaluates a score of a 'Result'. The larger, the better.
+--
+-- This doesn't include the size penalty.
 resultScore :: Result -> Int
 resultScore (Result xs) = sum $ flip map xs
   $ \(a, b, (r1, r2)) -> justEq (a + b) r1 + justEq (a - b) r2
@@ -112,10 +133,12 @@ resultScore (Result xs) = sum $ flip map xs
     | otherwise = 1
   justEq _ Nothing = 0
 
+-- | An event in a progress of running Genetic Algorithm.
 data Event
   = RunEvent (Term, Result, Double, Seconds)
   | GenEvent [(ClosedTerm, Double)]
 
+-- | The main function.
 main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
