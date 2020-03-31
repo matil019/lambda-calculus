@@ -45,7 +45,7 @@ data Term = Term
 -- This is consistent with 'index':
 --
 -- @
--- 'preview' ('ix' i) == 'Just' ('index' i)
+-- 'Control.Lens.Fold.preview' ('ix' i) == 'Just' ('index' i)
 -- @
 --
 -- See also 'ixBound'.
