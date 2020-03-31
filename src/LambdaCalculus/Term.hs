@@ -17,7 +17,6 @@ import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal', ix)
 import Data.Conduit (ConduitT)
 import Data.List (find)
-import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Set (Set)
 import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
@@ -29,7 +28,6 @@ import Test.QuickCheck (Arbitrary, Gen, shrink)
 
 import qualified Data.Conduit.Combinators as C
 import qualified Data.List as List
-import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 import qualified LambdaCalculus.DeBruijn as DeBruijn
 import qualified LambdaCalculus.Genetic
@@ -60,43 +58,6 @@ alphaEqv = go []
   go dict (App m1 m2) (App n1 n2) =
     go dict m1 n1 && go dict m2 n2
   go _ _ _ = False
-
--- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
--- traversed in depth-first, pre-order.
---
--- The first element is always @m@. (TODO add a test)
---
--- The following law holds:
---
--- @
--- length ('linear' m) == 'countTerm' m
--- @
-linear :: Term -> NonEmpty Term
-linear m = m :| case m of
-  Var _ -> []
-  Abs _ n -> NE.toList $ linear n
-  App n1 n2 -> NE.toList $ linear n1 <> linear n2
-
--- | @'toList' == NonEmpty.'NE.toList' . 'linear'@
-toList :: Term -> [Term]
-toList = NE.toList . linear
-
--- | @index i m@ traverses @m@ to find a sub-term.
---
--- @m@ is traversed in depth-first, pre-order. @i == 0@ denotes @m@ itself. (TODO add a test)
---
--- @
--- index 0 m == Just m
--- index 3 ('App' ('App' ( v'Var' x) m) n) == Just m
--- @
---
--- Another equivalence:
---
--- @
--- 'toList' m !! i == fromJust ('index' i m)
--- @
-index :: Int -> Term -> Maybe Term
-index i m = at i (toList m)
 
 -- | Generates a 'Term' with a specified set of free variables.
 --
