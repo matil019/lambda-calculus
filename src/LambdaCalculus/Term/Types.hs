@@ -4,6 +4,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+-- | The types of lambda terms in the ordinary notation.
 module LambdaCalculus.Term.Types where
 
 import Control.DeepSeq (NFData)
@@ -13,15 +14,17 @@ import GHC.Generics (Generic)
 
 import qualified Data.Set as Set
 
--- | A safe @(!!)@.
+-- | A safe '(!!)'.
 at :: Int -> [a] -> Maybe a
 at i xs
   | i < 0 = Nothing
   | (x:_) <- drop i xs = Just x
   | otherwise = Nothing
 
+-- | A variable representation.
 type Var = String
 
+-- | A lambda term without metadata.
 data TermRaw
   = VarRaw Var        -- ^ A variable
   | AbsRaw Var Term   -- ^ An abstraction
@@ -32,6 +35,7 @@ data TermRaw
 data Term = Term
   { termRaw :: TermRaw
   , freeVars :: Set Var
+  -- | The number of sub-terms in 'termRaw'.
   , countTerm :: Int
   }
   deriving (Eq, Generic, NFData, Show)
@@ -39,7 +43,10 @@ data Term = Term
 -- | Traverses sub-terms in depth-first, pre-order.
 --
 -- This is consistent with 'index':
--- > preview (ix i) == Just (index i)
+--
+-- @
+-- 'preview' ('ix' i) == 'Just' ('index' i)
+-- @
 --
 -- See also 'ixBound'.
 --
@@ -100,7 +107,9 @@ data BoundTerm = BoundTerm
   }
   deriving (Eq, Generic, NFData, Show)
 
--- | 'ix @Term' with an additional info. (See 'BoundTerm')
+-- TODO move LambdaCalculus.Term.index here
+
+-- | An 'ix' for 'Term' with an additional info. (See 'BoundTerm')
 ixBound :: Int -> Traversal Term Term BoundTerm Term
 ixBound = loop []
   where
