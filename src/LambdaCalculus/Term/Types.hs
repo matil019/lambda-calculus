@@ -104,7 +104,7 @@ data BoundTerm = BoundTerm
 -- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
 -- traversed in depth-first, pre-order.
 --
--- The first element is always @m@. (TODO add a test)
+-- The first element is always @m@.
 --
 -- The following law holds:
 --
@@ -123,7 +123,7 @@ toList = NE.toList . linear
 
 -- | @index i m@ traverses @m@ to find a sub-term.
 --
--- @m@ is traversed in depth-first, pre-order. @i == 0@ denotes @m@ itself. (TODO add a test)
+-- @m@ is traversed in depth-first, pre-order. @i == 0@ denotes @m@ itself.
 --
 -- @
 -- index 0 m == Just m

@@ -33,6 +33,20 @@ spec = do
   prop "length (linear m) == countTerm m" $ \(AnyTerm (_, m)) ->
     length (linear m) `shouldBe` countTerm m
 
+  prop "head (linear m) == m" $ \(AnyTerm (_, m)) ->
+    NE.head (linear m) `shouldBe` m
+
+  prop "index 0 m == Just m" $ \(AnyTerm (_, m)) ->
+    index 0 m `shouldBe` Just m
+
+  it "index i m == Just (toList m !! i)" $
+    let gen = do
+          AnyTerm (_, m) <- arbitrary
+          let c = countTerm m
+          i <- Q.choose (0, c-1)
+          pure (m, i)
+    in forAll gen $ \(m, i) -> index i m == Just (toList m !! i)
+
   prop "ix is consistent with linear" $ \(AnyTerm (_, m)) ->
     NE.toList (linear m) `shouldBe` [ n | i <- [0..(countTerm m)], n <- toListOf (ix i) m ]
 
