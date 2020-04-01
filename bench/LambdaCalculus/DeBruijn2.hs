@@ -22,7 +22,7 @@ import Data.List (elemIndex)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (fromMaybe)
 import Data.Tuple.Extra (dupe)
-import LambdaCalculus.Genetic (Genetic, genChildren)
+import LambdaCalculus.Genetic (Genetic, genCrossover)
 import LambdaCalculus.InfList (InfList)
 import LambdaCalculus.Utils (FiniteList(FiniteList), at, unFiniteList)
 import Numeric.Natural (Natural)
@@ -255,7 +255,7 @@ instance Ixed ClosedTerm where
   ix i f = fmap ClosedTerm . ix i f . unClosedTerm
 
 instance Genetic ClosedTerm where
-  genChildren p12@(ClosedTerm parent1, ClosedTerm parent2) = do
+  genCrossover p12@(ClosedTerm parent1, ClosedTerm parent2) = do
     i1 <- Q.choose (0, countTerm parent1 - 1)
     i2 <- Q.choose (0, countTerm parent2 - 1)
     let sub1 = preview (ixBound' i1) parent1
@@ -265,7 +265,7 @@ instance Genetic ClosedTerm where
     -- retry if not swappable
     if fromMaybe False $ swappable <$> sub1 <*> sub2
       then pure (ClosedTerm child1, ClosedTerm child2)
-      else genChildren p12
+      else genCrossover p12
     where
     ixBound' :: Int -> Traversal' Term BoundTerm
     ixBound' i f = ixBound i (fmap boundTerm . f)

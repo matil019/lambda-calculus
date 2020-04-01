@@ -2,7 +2,7 @@ module LambdaCalculus.DeBruijnSpec where
 
 import Control.Lens (ix, toListOf)
 import LambdaCalculus.DeBruijn
-import LambdaCalculus.Genetic (genChildren, genMutant)
+import LambdaCalculus.Genetic (genCrossover, genMutant)
 import LambdaCalculus.Utils (FiniteList(FiniteList))
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
@@ -55,7 +55,7 @@ spec = do
   describe "instance Genetic ClosedTerm" $ do
     let isReallyClosed = isClosed . unClosedTerm
 
-    it "genChildren should return closed terms" $ forAll (arbitrary >>= \m12 -> genChildren m12 >>= \m12' -> pure (m12, m12')) $ \((m1, m2), (m1', m2')) -> do
+    it "genCrossover should return closed terms" $ forAll (arbitrary >>= \m12 -> genCrossover m12 >>= \m12' -> pure (m12, m12')) $ \((m1, m2), (m1', m2')) -> do
       m1  `shouldSatisfy` isReallyClosed
       m2  `shouldSatisfy` isReallyClosed
       m1' `shouldSatisfy` isReallyClosed

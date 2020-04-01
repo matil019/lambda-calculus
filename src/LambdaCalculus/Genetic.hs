@@ -17,8 +17,7 @@ import qualified Test.QuickCheck as Q
 -- | A set of Genetic Algorithm operation.
 class Genetic a where
   -- | Performs a crossover between a pair of parents.
-  -- TODO rename to genCrossover
-  genChildren :: (a, a) -> Gen (a, a)
+  genCrossover :: (a, a) -> Gen (a, a)
 
   -- | Generates a mutant from a parent.
   genMutant :: a -> Gen a
@@ -40,7 +39,7 @@ newGeneration parents = do
     $ replicateM (population * breedPcts `div` 100 `div` 2)
     $ do parent1 <- chooseParent parents
          parent2 <- chooseParent parents
-         genChildren (parent1, parent2)
+         genCrossover (parent1, parent2)
   mutants <- replicateM (population * mutantPcts `div` 100)
     $ do parent <- chooseParent parents
          genMutant parent

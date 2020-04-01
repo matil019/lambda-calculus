@@ -21,7 +21,7 @@ import Data.Set (Set)
 import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
 import LambdaCalculus.DeBruijn (fromDeBruijn, toDeBruijn)
-import LambdaCalculus.Genetic (Genetic, genChildren)
+import LambdaCalculus.Genetic (Genetic, genCrossover)
 import LambdaCalculus.Term.Types
 import Numeric.Natural (Natural)
 import Test.QuickCheck (Arbitrary, Gen, shrink)
@@ -115,8 +115,8 @@ instance Ixed ClosedTerm where
 
 instance Genetic ClosedTerm where
   -- TODO implement without converting to DeBruijn (for performance)?
-  genChildren (parent1, parent2) = do
-    (child1, child2) <- genChildren (to parent1, to parent2)
+  genCrossover (parent1, parent2) = do
+    (child1, child2) <- genCrossover (to parent1, to parent2)
     pure (from child1, from child2)
     where
     to = DeBruijn.ClosedTerm . snd . toDeBruijn mempty . unClosedTerm
