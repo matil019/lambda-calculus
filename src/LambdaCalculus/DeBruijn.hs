@@ -23,6 +23,7 @@ import Data.Maybe (fromMaybe)
 import Data.Tuple (swap)
 import Data.Tuple.Extra (dupe)
 import LambdaCalculus.Genetic (Genetic, genChildren)
+import LambdaCalculus.InfList (InfList)
 import LambdaCalculus.Utils (at)
 import Numeric.Natural (Natural)
 import GHC.Generics (Generic)
@@ -31,6 +32,7 @@ import Test.QuickCheck (Arbitrary, Gen)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
 import qualified LambdaCalculus.Genetic
+import qualified LambdaCalculus.InfList as InfList
 import qualified LambdaCalculus.Term.Types as Term
 import qualified Test.QuickCheck as Q
 
@@ -261,20 +263,18 @@ type instance IxValue ClosedTerm = Term
 
 -- | Performs a substitution.
 --
--- The list must be infinite. TODO add a newtype
---
 -- You would like to use 'reduceBeta' instead of using this directly.
-substitute :: [Term] -> Term -> Term
-substitute s (Var x) = s !! (x-1)
+substitute :: InfList Term -> Term -> Term
+substitute s (Var x) = InfList.toList s !! (x-1)
 substitute s (App m n) = App (substitute s m) (substitute s n)
-substitute s (Abs m) = Abs (substitute (Var 1 : map (\i -> substitute s' (Var i)) [1..]) m)
+substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> substitute s' (Var i)) $ InfList.enumFrom 1) m)
   where
-  s' = map shift s
-  shift = substitute (map Var [2..])
+  s' = fmap shift s
+  shift = substitute (fmap Var $ InfList.enumFrom 2)
 
 -- | Performs a beta-reduction.
 reduceBeta :: Term -> Term
-reduceBeta (App (Abs m) n) = substitute (n:map Var [1..]) m
+reduceBeta (App (Abs m) n) = substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
 reduceBeta m = m
 
 -- | @reduceStep m@ tries to reduce a beta-redux one step.
