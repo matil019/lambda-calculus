@@ -65,7 +65,7 @@ alphaEqv = go []
 -- in a term. Note that there is no upper limit of a size of a generated term;
 -- although rare, a huge term may be generated.
 --
--- If the list is empty, @genTerm@ always generates a closed term in a form of an @('Abs' _ _)@.
+-- @genTerm Set.empty@ always generates a closed term in a form of an @('Abs' _ _)@.
 genTerm :: Set Var -> Gen Term
 genTerm fv =
   if Set.null fv
