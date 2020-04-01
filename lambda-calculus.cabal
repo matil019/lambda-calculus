@@ -23,6 +23,7 @@ library
                        LambdaCalculus.Main
                        LambdaCalculus.Term
                        LambdaCalculus.Term.Types
+                       LambdaCalculus.Utils
   -- other-modules:
   build-depends:       base >=4.9 && <4.14
                      , QuickCheck

@@ -11,17 +11,11 @@ import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Set (Set)
+import LambdaCalculus.Utils (at)
 import GHC.Generics (Generic)
 
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
-
--- | A safe '(!!)'.
-at :: Int -> [a] -> Maybe a
-at i xs
-  | i < 0 = Nothing
-  | (x:_) <- drop i xs = Just x
-  | otherwise = Nothing
 
 -- | A variable representation.
 type Var = String
