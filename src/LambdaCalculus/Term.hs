@@ -120,7 +120,7 @@ instance Genetic ClosedTerm where
     pure (from child1, from child2)
     where
     to = DeBruijn.ClosedTerm . snd . toDeBruijn [] . unClosedTerm
-    from = ClosedTerm . fromDeBruijn [] . DeBruijn.unClosedTerm
+    from = ClosedTerm . fromDeBruijn mempty . DeBruijn.unClosedTerm
 
   genMutant = fmap ClosedTerm . genModifiedTerm Set.empty . unClosedTerm
 

@@ -6,6 +6,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 -- | Lambda terms in De Bruijn index notation.
 module LambdaCalculus.DeBruijn where
 
@@ -24,7 +25,7 @@ import Data.Tuple (swap)
 import Data.Tuple.Extra (dupe)
 import LambdaCalculus.Genetic (Genetic, genChildren)
 import LambdaCalculus.InfList (InfList)
-import LambdaCalculus.Utils (at)
+import LambdaCalculus.Utils (FiniteList, at, unFiniteList)
 import Numeric.Natural (Natural)
 import GHC.Generics (Generic)
 import Test.QuickCheck (Arbitrary, Gen)
@@ -95,10 +96,8 @@ toDeBruijn = \free -> swap . flip runState free . go []
 -- The list must be long enough to have all the free variables the 'Term' refers.
 --
 -- The return value of 'toDeBruijn' can always be applied to 'fromDeBruijn'.
---
--- __NOTE__ the list must be finite! (TODO add a newtype)
-fromDeBruijn :: [Term.Var] -> Term -> Term.Term
-fromDeBruijn free = go infinitevars []
+fromDeBruijn :: FiniteList Term.Var -> Term -> Term.Term
+fromDeBruijn (unFiniteList -> free) = go infinitevars []
   where
   -- @go unused bound m@ recursively converts @m@ from DeBruijn notation to the ordinary one.
   --
