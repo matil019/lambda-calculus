@@ -20,6 +20,7 @@ extra-source-files:  CHANGELOG.md
 library
   exposed-modules:     LambdaCalculus.DeBruijn
                        LambdaCalculus.Genetic
+                       LambdaCalculus.InfList
                        LambdaCalculus.Main
                        LambdaCalculus.Term
                        LambdaCalculus.Term.Types
