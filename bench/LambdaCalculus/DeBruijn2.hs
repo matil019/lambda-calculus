@@ -97,8 +97,6 @@ pattern App m n <- Term { termRaw = AppRaw m n }
 -- > preview (ix i) == Just (index i)
 --
 -- See also 'ixBound'.
---
--- TODO make sure that @instance At Term@ does *not* form a "reasonable instance"
 instance Ixed Term where
   ix :: Int -> Traversal' Term Term
   ix i f = ixBound i (f . boundTerm)
