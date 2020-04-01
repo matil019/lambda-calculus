@@ -10,6 +10,7 @@ import Data.Semigroup ((<>))
 #endif
 
 import Control.Monad (replicateM)
+import Numeric.Natural (Natural)
 import Test.QuickCheck (Gen)
 
 import qualified Test.QuickCheck as Q
@@ -25,7 +26,7 @@ class Genetic a where
 -- | An individual in a population.
 data Individual a = Individual
   { individual :: a
-  , score :: Int -- TODO rename to weight
+  , weight :: Natural
   }
 
 -- | Applies crossover and mutation to a generation to generate a new one.
@@ -47,4 +48,4 @@ newGeneration parents = do
 
 -- | Chooses an individual from a population with weights.
 chooseParent :: [Individual a] -> Gen a
-chooseParent = Q.frequency . map (\Individual{individual, score} -> (score, pure individual))
+chooseParent = Q.frequency . map (\Individual{individual, weight} -> (fromIntegral weight, pure individual))
