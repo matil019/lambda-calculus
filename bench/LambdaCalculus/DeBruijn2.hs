@@ -21,11 +21,10 @@ import Data.Conduit (ConduitT)
 import Data.List (elemIndex)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (fromMaybe)
-import Data.Tuple (swap)
 import Data.Tuple.Extra (dupe)
 import LambdaCalculus.Genetic (Genetic, genChildren)
 import LambdaCalculus.InfList (InfList)
-import LambdaCalculus.Utils (FiniteList, at, unFiniteList)
+import LambdaCalculus.Utils (FiniteList(FiniteList), at, unFiniteList)
 import Numeric.Natural (Natural)
 import GHC.Generics (Generic)
 import Test.QuickCheck (Arbitrary, Gen)
@@ -120,10 +119,10 @@ data BoundTerm = BoundTerm
 -- The first value in the returned tuple is an ordered set of free variables
 -- which the second refers.
 toDeBruijn
-  :: [Term.Var]  -- ^ Known free variables; the return value is guaranteed to begin with this list
-  -> Term.Term   -- ^ The term to convert
-  -> ([Term.Var], Term)
-toDeBruijn = \free -> swap . flip runState free . go []
+  :: FiniteList Term.Var  -- ^ Known free variables; the return value is guaranteed to begin with this list
+  -> Term.Term            -- ^ The term to convert
+  -> (FiniteList Term.Var, Term)
+toDeBruijn = \(FiniteList free) -> (\(a, b) -> (FiniteList b, a)) . flip runState free . go []
   where
   go :: [Term.Var] -> Term.Term -> State [Term.Var] Term
   go bound (Term.Var x)

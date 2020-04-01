@@ -38,18 +38,18 @@ spec = do
 
   describe "conversion between the other notation" $ do
     prop "(toDeBruijn . fromDeBruijn) m == m" $ \(AnyTerm (num, m)) ->
-      let free = (map show [1..num])
-      in (snd . toDeBruijn free . fromDeBruijn (FiniteList free)) m `shouldBe` m
+      let free = FiniteList (map show [1..num])
+      in (snd . toDeBruijn free . fromDeBruijn free) m `shouldBe` m
 
     prop "(fromDeBruijn . toDeBruijn) m `alphaEqv` m" $ \(Term.AnyTerm (_, m)) ->
-      ((\(a, b) -> fromDeBruijn (FiniteList a) b) . toDeBruijn []) m `shouldSatisfy` (`Term.alphaEqv` m)
+      (uncurry fromDeBruijn . toDeBruijn mempty) m `shouldSatisfy` (`Term.alphaEqv` m)
 
     describe "reduceBeta" $ do
       prop "arbitrary Term.BetaReducibleTerm" $ \(Term.BetaReducibleTerm (_, m)) ->
         case m of
           Term.App (Term.Abs _ _) _ ->
-            let (free, m') = toDeBruijn [] m
-            in fromDeBruijn (FiniteList free) (reduceBeta m') `shouldSatisfy` (`Term.alphaEqv` Term.reduceBeta m)
+            let (free, m') = toDeBruijn mempty m
+            in fromDeBruijn free (reduceBeta m') `shouldSatisfy` (`Term.alphaEqv` Term.reduceBeta m)
           _ -> Q.discard
 
   describe "instance Genetic ClosedTerm" $ do
