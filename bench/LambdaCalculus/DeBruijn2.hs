@@ -195,7 +195,6 @@ toList = NE.toList . linear
 --
 -- Another equivalence:
 -- > 'toList' m !! i == fromJust ('index' i m)
--- TODO add test
 index :: Int -> Term -> Maybe Term
 index i m = at i (toList m)
 
@@ -220,7 +219,6 @@ ixBound = loop 0
 -- although rare, a huge term may be generated.
 --
 -- If the list is empty, @genTerm@ always generates a closed term in a form of an @'Abs' _@.
--- TODO Allow @App@ (consider the size)
 genTerm :: Int -> Gen Term
 genTerm freeNum = do
   -- see LambdaCalculus.Term.genTerm for explanation of the probability
@@ -264,7 +262,7 @@ instance Genetic ClosedTerm where
         sub2 = preview (ixBound' i2) parent2
         child1 = maybe id (set (ix i1) . boundTerm) sub2 $ parent1
         child2 = maybe id (set (ix i2) . boundTerm) sub1 $ parent2
-    -- retry if not swappable TODO implement without retrying
+    -- retry if not swappable
     if fromMaybe False $ swappable <$> sub1 <*> sub2
       then pure (ClosedTerm child1, ClosedTerm child2)
       else genChildren p12
