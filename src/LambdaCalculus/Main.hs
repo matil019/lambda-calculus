@@ -107,7 +107,6 @@ zipWithIndexC = loop 0
     loop (i + 1)
 
 -- | Runs conduits concurrently. 'pooledMapConcurrently' for 'ConduitT'.
--- TODO take MonadUnliftIO m instead of IO
 pooledMapConcurrentlyC :: (MonadIO m, Traversable t) => (a -> ConduitT () o IO r) -> t a -> ConduitT i o m (t r)
 pooledMapConcurrentlyC f as = do
   q <- liftIO newTMQueueIO
