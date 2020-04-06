@@ -6,6 +6,8 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
+-- | Lambda terms in De Bruijn index notation.
 module LambdaCalculus.DeBruijn where
 
 #if !MIN_VERSION_base(4,11,0)
@@ -19,10 +21,10 @@ import Data.Conduit (ConduitT)
 import Data.List (elemIndex)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (fromMaybe)
-import Data.Tuple (swap)
 import Data.Tuple.Extra (dupe)
-import LambdaCalculus.Genetic (Genetic, genChildren)
-import LambdaCalculus.Term.Types (at)
+import LambdaCalculus.Genetic (Genetic, genCrossover)
+import LambdaCalculus.InfList (InfList)
+import LambdaCalculus.Utils (FiniteList(FiniteList), at, unFiniteList)
 import Numeric.Natural (Natural)
 import GHC.Generics (Generic)
 import Test.QuickCheck (Arbitrary, Gen)
@@ -30,11 +32,13 @@ import Test.QuickCheck (Arbitrary, Gen)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
 import qualified LambdaCalculus.Genetic
+import qualified LambdaCalculus.InfList as InfList
 import qualified LambdaCalculus.Term.Types as Term
 import qualified Test.QuickCheck as Q
 
+-- | A lambda term in De Bruijn index notation.
 data Term
-  = Var Int        -- ^ A variable (starts at @1@)
+  = Var Int        -- ^ A variable (must start at @1@)
   | Abs Term       -- ^ An abstraction
   | App Term Term  -- ^ An application
   deriving (Eq, Generic, NFData, Show)
@@ -42,11 +46,12 @@ data Term
 -- | Traverses sub-terms in depth-first, pre-order.
 --
 -- This is consistent with 'index':
--- > preview (ix i) == Just (index i)
+--
+-- @
+-- 'preview' ('ix' i) == 'Just' ('index' i)
+-- @
 --
 -- See also 'ixBound'.
---
--- TODO make sure that @instance At Term@ does *not* form a "reasonable instance"
 instance Ixed Term where
   ix :: Int -> Traversal' Term Term
   ix i f = ixBound i (f . boundTerm)
@@ -57,7 +62,7 @@ type instance IxValue Term = Term
 -- | A term with additional info about its enclosing term.
 data BoundTerm = BoundTerm
   { boundTerm :: Term
-  -- | @boundTerm == Var x@ is bound if @x <= boundNum@.
+  -- | A variable @x@ is bound if @boundTerm == Var x@ and @x <= boundNum@.
   , boundNum :: Int
   }
   deriving (Eq, Generic, NFData, Show)
@@ -67,10 +72,10 @@ data BoundTerm = BoundTerm
 -- The first value in the returned tuple is an ordered set of free variables
 -- which the second refers.
 toDeBruijn
-  :: [Term.Var]  -- ^ Known free variables; the return value is guaranteed to begin with this list
-  -> Term.Term   -- ^ The term to convert
-  -> ([Term.Var], Term)
-toDeBruijn = \free -> swap . flip runState free . go []
+  :: FiniteList Term.Var  -- ^ Known free variables; the return value is guaranteed to begin with this list
+  -> Term.Term            -- ^ The term to convert
+  -> (FiniteList Term.Var, Term)
+toDeBruijn = \(FiniteList free) -> (\(a, b) -> (FiniteList b, a)) . flip runState free . go []
   where
   go :: [Term.Var] -> Term.Term -> State [Term.Var] Term
   go bound (Term.Var x)
@@ -85,13 +90,13 @@ toDeBruijn = \free -> swap . flip runState free . go []
     n' <- go bound n
     pure $ App m' n'
 
--- | The list must be long enough to have all the free variables the 'Term' refers.
+-- | Converts a De Bruijn index 'Term' into the ordinary notation.
+--
+-- The list must be long enough to have all the free variables the 'Term' refers.
 --
 -- The return value of 'toDeBruijn' can always be applied to 'fromDeBruijn'.
---
--- *NOTE* the list must be finite! (TODO add a newtype)
-fromDeBruijn :: [Term.Var] -> Term -> Term.Term
-fromDeBruijn free = go infinitevars []
+fromDeBruijn :: FiniteList Term.Var -> Term -> Term.Term
+fromDeBruijn (unFiniteList -> free) = go infinitevars []
   where
   -- @go unused bound m@ recursively converts @m@ from DeBruijn notation to the ordinary one.
   --
@@ -109,17 +114,23 @@ fromDeBruijn free = go infinitevars []
   -- infinite list of strings, "a" : "b" : ... : "z" : "aa" : "ab" : ...
   infinitevars = filter (`notElem` free) $ concat $ iterate (\ss -> [ c:s | c <- ['a'..'z'], s <- ss ]) [ [c] | c <- ['a'..'z'] ]
 
+-- | Formats a 'Term' into a human-readable string.
+--
+-- TODO remove redundant parens
 formatTerm :: Term -> String
 formatTerm (Var x) = show x
 formatTerm (Abs m) = "(\\ " <> formatTerm m <> ")"
 formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
 
+-- | Counts a number of sub-terms in a 'Term'.
 countTerm :: Term -> Int
 countTerm (Var _) = 1
 countTerm (Abs m) = 1 + countTerm m
 countTerm (App m n) = 1 + countTerm m + countTerm n
 
 -- | Is this 'Term' closed (i.e. has no free variables)?
+--
+-- TODO consider implementing this with the lenses (bench)
 isClosed :: Term -> Bool
 isClosed = go 0
   where
@@ -134,14 +145,16 @@ isClosed = go 0
 --
 -- The following law holds:
 --
--- > length ('linear' m) == 'countTerm' m
+-- @
+-- length ('linear' m) == 'countTerm' m
+-- @
 linear :: Term -> NonEmpty Term
 linear m = m :| case m of
   Var _ -> []
   Abs n -> NE.toList $ linear n
   App n1 n2 -> NE.toList $ linear n1 <> linear n2
 
--- | This list can never be empty. See 'linear'
+-- | @'toList' == NonEmpty.'NE.toList' . 'linear'@
 toList :: Term -> [Term]
 toList = NE.toList . linear
 
@@ -149,16 +162,20 @@ toList = NE.toList . linear
 --
 -- @m@ is traversed in depth-first, pre-order. @i == 0@ denotes @m@ itself.
 --
--- > index 0 m == Just m
--- > index 3 ('App' ('App' ('Var' \'x\') n) o) == Just n
+-- @
+-- index 0 m == Just m
+-- index 3 ('App' ('App' ('Var' x) m) n) == Just m
+-- @
 --
 -- Another equivalence:
--- > 'toList' m !! i == fromJust ('index' i m)
--- TODO add test
+--
+-- @
+-- 'toList' m !! i == fromJust ('index' i m)
+-- @
 index :: Int -> Term -> Maybe Term
 index i m = at i (toList m)
 
--- | 'ix @Term' with an additional info. (See 'BoundTerm')
+-- | An 'ix' for 'Term' with an additional info. (See 'BoundTerm')
 ixBound :: Int -> Traversal Term Term BoundTerm Term
 ixBound = loop 0
   where
@@ -178,8 +195,7 @@ ixBound = loop 0
 -- in a term. Note that there is no upper limit of a size of a generated term;
 -- although rare, a huge term may be generated.
 --
--- If the list is empty, @genTerm@ always generates a closed term in a form of an @'Abs' _@.
--- TODO Allow @App@ (consider the size)
+-- @genTerm 0@ always generates a closed term in a form of an @('Abs' _)@.
 genTerm :: Int -> Gen Term
 genTerm freeNum = do
   -- see LambdaCalculus.Term.genTerm for explanation of the probability
@@ -216,7 +232,7 @@ instance Ixed ClosedTerm where
   ix i f = fmap ClosedTerm . ix i f . unClosedTerm
 
 instance Genetic ClosedTerm where
-  genChildren p12@(ClosedTerm parent1, ClosedTerm parent2) = do
+  genCrossover p12@(ClosedTerm parent1, ClosedTerm parent2) = do
     i1 <- Q.choose (0, countTerm parent1 - 1)
     i2 <- Q.choose (0, countTerm parent2 - 1)
     let sub1 = preview (ixBound' i1) parent1
@@ -226,7 +242,7 @@ instance Genetic ClosedTerm where
     -- retry if not swappable TODO implement without retrying
     if fromMaybe False $ swappable <$> sub1 <*> sub2
       then pure (ClosedTerm child1, ClosedTerm child2)
-      else genChildren p12
+      else genCrossover p12
     where
     ixBound' :: Int -> Traversal' Term BoundTerm
     ixBound' i f = ixBound i (fmap boundTerm . f)
@@ -241,19 +257,25 @@ instance Genetic ClosedTerm where
 type instance Index ClosedTerm = Int
 type instance IxValue ClosedTerm = Term
 
--- | The list must be infinite. TODO add a newtype
-substitute :: [Term] -> Term -> Term
-substitute s (Var x) = s !! (x-1)
+-- | Performs a substitution.
+--
+-- You would like to use 'reduceBeta' instead of using this directly.
+substitute :: InfList Term -> Term -> Term
+substitute s (Var x) = InfList.toList s !! (x-1)
 substitute s (App m n) = App (substitute s m) (substitute s n)
-substitute s (Abs m) = Abs (substitute (Var 1 : map (\i -> substitute s' (Var i)) [1..]) m)
+substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> substitute s' (Var i)) $ InfList.enumFrom 1) m)
   where
-  s' = map shift s
-  shift = substitute (map Var [2..])
+  s' = fmap shift s
+  shift = substitute (fmap Var $ InfList.enumFrom 2)
 
+-- | Performs a beta-reduction.
 reduceBeta :: Term -> Term
-reduceBeta (App (Abs m) n) = substitute (n:map Var [1..]) m
+reduceBeta (App (Abs m) n) = substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
 reduceBeta m = m
 
+-- | @reduceStep m@ tries to reduce a beta-redux one step.
+--
+-- If @m@ can't be reduced any more, returns @Nothing@.
 reduceStep :: Term -> Maybe Term
 reduceStep (Var _) = Nothing
 reduceStep (Abs m) = Abs <$> reduceStep m
@@ -262,10 +284,11 @@ reduceStep (App m n) = case reduceStep m of
   Just m' -> Just $ App m' n
   Nothing -> App m <$> reduceStep n
 
+-- | Repeatedly reduces ('reduceStep') a term and yields each step.
 reduceSteps :: Monad m => Term -> ConduitT i Term m ()
 reduceSteps = C.unfold (fmap dupe . reduceStep)
 
--- | Interprets a lambda term as a Church numeral. The term must be fully reduced.
+-- | Interprets a lambda term as a Church numeral. The term must be fully reduced. (TODO add a newtype)
 interpretChurchNumber :: Term -> Maybe Natural
 interpretChurchNumber = \m ->
   go $ reduceBeta $ App (reduceBeta (App m (Var 2))) (Var 1)
@@ -274,12 +297,18 @@ interpretChurchNumber = \m ->
   go (App (Var 2) n) = fmap (1+) $ go n
   go _ = Nothing
 
+{-# DEPRECATED genChurchNumber "Use encodeChurchNumber" #-}
+-- |
 genChurchNumber :: Gen Term
 genChurchNumber = Abs . Abs <$> genTerm 2
 
+-- | Encodes a natural number into a Church numeral.
 encodeChurchNumber :: Natural -> Term
 encodeChurchNumber n = Abs $ Abs $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
 
+-- | Interprets a lambda term as a Church pair.
+--
+-- The argument can be a redux. Always returns reduxes.
 interpretChurchPair :: Term -> (Term, Term)
 interpretChurchPair m =
   ( App m (Abs (Abs (Var 2)))

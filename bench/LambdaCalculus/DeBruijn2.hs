@@ -7,6 +7,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 module LambdaCalculus.DeBruijn2 where
 
 #if !MIN_VERSION_base(4,11,0)
@@ -20,10 +21,10 @@ import Data.Conduit (ConduitT)
 import Data.List (elemIndex)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (fromMaybe)
-import Data.Tuple (swap)
 import Data.Tuple.Extra (dupe)
-import LambdaCalculus.Genetic (Genetic, genChildren)
-import LambdaCalculus.Term.Types (at)
+import LambdaCalculus.Genetic (Genetic, genCrossover)
+import LambdaCalculus.InfList (InfList)
+import LambdaCalculus.Utils (FiniteList(FiniteList), at, unFiniteList)
 import Numeric.Natural (Natural)
 import GHC.Generics (Generic)
 import Test.QuickCheck (Arbitrary, Gen)
@@ -31,6 +32,7 @@ import Test.QuickCheck (Arbitrary, Gen)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
 import qualified LambdaCalculus.Genetic
+import qualified LambdaCalculus.InfList as InfList
 import qualified LambdaCalculus.Term.Types as Term
 import qualified Test.QuickCheck as Q
 
@@ -97,8 +99,6 @@ pattern App m n <- Term { termRaw = AppRaw m n }
 -- > preview (ix i) == Just (index i)
 --
 -- See also 'ixBound'.
---
--- TODO make sure that @instance At Term@ does *not* form a "reasonable instance"
 instance Ixed Term where
   ix :: Int -> Traversal' Term Term
   ix i f = ixBound i (f . boundTerm)
@@ -119,10 +119,10 @@ data BoundTerm = BoundTerm
 -- The first value in the returned tuple is an ordered set of free variables
 -- which the second refers.
 toDeBruijn
-  :: [Term.Var]  -- ^ Known free variables; the return value is guaranteed to begin with this list
-  -> Term.Term   -- ^ The term to convert
-  -> ([Term.Var], Term)
-toDeBruijn = \free -> swap . flip runState free . go []
+  :: FiniteList Term.Var  -- ^ Known free variables; the return value is guaranteed to begin with this list
+  -> Term.Term            -- ^ The term to convert
+  -> (FiniteList Term.Var, Term)
+toDeBruijn = \(FiniteList free) -> (\(a, b) -> (FiniteList b, a)) . flip runState free . go []
   where
   go :: [Term.Var] -> Term.Term -> State [Term.Var] Term
   go bound (Term.Var x)
@@ -140,10 +140,8 @@ toDeBruijn = \free -> swap . flip runState free . go []
 -- | The list must be long enough to have all the free variables the 'Term' refers.
 --
 -- The return value of 'toDeBruijn' can always be applied to 'fromDeBruijn'.
---
--- *NOTE* the list must be finite! (TODO add a newtype)
-fromDeBruijn :: [Term.Var] -> Term -> Term.Term
-fromDeBruijn free = go infinitevars []
+fromDeBruijn :: FiniteList Term.Var -> Term -> Term.Term
+fromDeBruijn (unFiniteList -> free) = go infinitevars []
   where
   -- @go unused bound m@ recursively converts @m@ from DeBruijn notation to the ordinary one.
   --
@@ -197,7 +195,6 @@ toList = NE.toList . linear
 --
 -- Another equivalence:
 -- > 'toList' m !! i == fromJust ('index' i m)
--- TODO add test
 index :: Int -> Term -> Maybe Term
 index i m = at i (toList m)
 
@@ -222,7 +219,6 @@ ixBound = loop 0
 -- although rare, a huge term may be generated.
 --
 -- If the list is empty, @genTerm@ always generates a closed term in a form of an @'Abs' _@.
--- TODO Allow @App@ (consider the size)
 genTerm :: Int -> Gen Term
 genTerm freeNum = do
   -- see LambdaCalculus.Term.genTerm for explanation of the probability
@@ -259,17 +255,17 @@ instance Ixed ClosedTerm where
   ix i f = fmap ClosedTerm . ix i f . unClosedTerm
 
 instance Genetic ClosedTerm where
-  genChildren p12@(ClosedTerm parent1, ClosedTerm parent2) = do
+  genCrossover p12@(ClosedTerm parent1, ClosedTerm parent2) = do
     i1 <- Q.choose (0, countTerm parent1 - 1)
     i2 <- Q.choose (0, countTerm parent2 - 1)
     let sub1 = preview (ixBound' i1) parent1
         sub2 = preview (ixBound' i2) parent2
         child1 = maybe id (set (ix i1) . boundTerm) sub2 $ parent1
         child2 = maybe id (set (ix i2) . boundTerm) sub1 $ parent2
-    -- retry if not swappable TODO implement without retrying
+    -- retry if not swappable
     if fromMaybe False $ swappable <$> sub1 <*> sub2
       then pure (ClosedTerm child1, ClosedTerm child2)
-      else genChildren p12
+      else genCrossover p12
     where
     ixBound' :: Int -> Traversal' Term BoundTerm
     ixBound' i f = ixBound i (fmap boundTerm . f)
@@ -284,17 +280,16 @@ instance Genetic ClosedTerm where
 type instance Index ClosedTerm = Int
 type instance IxValue ClosedTerm = Term
 
--- | The list must be infinite. TODO add a newtype
-substitute :: [Term] -> Term -> Term
-substitute s (Var x) = s !! (x-1)
+substitute :: InfList Term -> Term -> Term
+substitute s (Var x) = InfList.toList s !! (x-1)
 substitute s (App m n) = App (substitute s m) (substitute s n)
-substitute s (Abs m) = Abs (substitute (Var 1 : map (\i -> substitute s' (Var i)) [1..]) m)
+substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> substitute s' (Var i)) $ InfList.enumFrom 1) m)
   where
-  s' = map shift s
-  shift = substitute (map Var [2..])
+  s' = fmap shift s
+  shift = substitute (fmap Var $ InfList.enumFrom 2)
 
 reduceBeta :: Term -> Term
-reduceBeta (App (Abs m) n) = substitute (n:map Var [1..]) m
+reduceBeta (App (Abs m) n) = substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
 reduceBeta m = m
 
 reduceStep :: Term -> Maybe Term

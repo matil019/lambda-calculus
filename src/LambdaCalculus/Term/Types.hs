@@ -4,24 +4,23 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+-- | The types of lambda terms in the ordinary notation.
 module LambdaCalculus.Term.Types where
 
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Set (Set)
+import LambdaCalculus.Utils (at)
 import GHC.Generics (Generic)
 
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 
--- | A safe @(!!)@.
-at :: Int -> [a] -> Maybe a
-at i xs
-  | i < 0 = Nothing
-  | (x:_) <- drop i xs = Just x
-  | otherwise = Nothing
-
+-- | A variable representation.
 type Var = String
 
+-- | A lambda term without metadata.
 data TermRaw
   = VarRaw Var        -- ^ A variable
   | AbsRaw Var Term   -- ^ An abstraction
@@ -32,6 +31,7 @@ data TermRaw
 data Term = Term
   { termRaw :: TermRaw
   , freeVars :: Set Var
+  -- | The number of sub-terms in 'termRaw'.
   , countTerm :: Int
   }
   deriving (Eq, Generic, NFData, Show)
@@ -39,11 +39,12 @@ data Term = Term
 -- | Traverses sub-terms in depth-first, pre-order.
 --
 -- This is consistent with 'index':
--- > preview (ix i) == Just (index i)
+--
+-- @
+-- 'Control.Lens.Fold.preview' ('ix' i) == 'Just' ('index' i)
+-- @
 --
 -- See also 'ixBound'.
---
--- TODO make sure that @instance At Term@ does *not* form a "reasonable instance"
 instance Ixed Term where
   ix :: Int -> Traversal' Term Term
   ix i f = ixBound i (f . boundTerm)
@@ -100,7 +101,44 @@ data BoundTerm = BoundTerm
   }
   deriving (Eq, Generic, NFData, Show)
 
--- | 'ix @Term' with an additional info. (See 'BoundTerm')
+-- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
+-- traversed in depth-first, pre-order.
+--
+-- The first element is always @m@.
+--
+-- The following law holds:
+--
+-- @
+-- length ('linear' m) == 'countTerm' m
+-- @
+linear :: Term -> NonEmpty Term
+linear m = m :| case m of
+  Var _ -> []
+  Abs _ n -> NE.toList $ linear n
+  App n1 n2 -> NE.toList $ linear n1 <> linear n2
+
+-- | @'toList' == NonEmpty.'NE.toList' . 'linear'@
+toList :: Term -> [Term]
+toList = NE.toList . linear
+
+-- | @index i m@ traverses @m@ to find a sub-term.
+--
+-- @m@ is traversed in depth-first, pre-order. @i == 0@ denotes @m@ itself.
+--
+-- @
+-- index 0 m == Just m
+-- index 3 ('App' ('App' ( v'Var' x) m) n) == Just m
+-- @
+--
+-- Another equivalence:
+--
+-- @
+-- 'toList' m !! i == fromJust ('index' i m)
+-- @
+index :: Int -> Term -> Maybe Term
+index i m = at i (toList m)
+
+-- | An 'ix' for 'Term' with an additional info. (See 'BoundTerm')
 ixBound :: Int -> Traversal Term Term BoundTerm Term
 ixBound = loop []
   where
