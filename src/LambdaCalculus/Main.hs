@@ -223,7 +223,7 @@ main = do
       C.yield $ GenEvent mergedPopu
       loop mergedPopu
 
-    scoreToWeight score = max 1 $ round $ 1000 * score
+    scoreToWeight score = round $ max 1 $ 1000 * score
 
     numPopulation = 1000
 
