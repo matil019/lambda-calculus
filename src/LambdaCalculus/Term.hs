@@ -170,7 +170,7 @@ reduceBeta :: Term -> Term
 reduceBeta (App (Abs x m) n) = substitute x n m
 reduceBeta m = m
 
--- | @reduceStep m@ tries to reduce a beta-redux one step.
+-- | @reduceStep m@ tries to reduce a beta-redex one step.
 --
 -- If @m@ can't be reduced any more, returns @Nothing@.
 reduceStep :: Term -> Maybe Term
@@ -205,7 +205,7 @@ encodeChurchNumber n = Abs "f" $ Abs "x" $ iterate (App (Var "f")) (Var "x") !! 
 
 -- | Interprets a lambda term as a Church pair.
 --
--- The argument can be a redux. Always returns reduxes.
+-- The argument can be a redex. Always returns redexes.
 interpretChurchPair :: Term -> (Term, Term)
 interpretChurchPair m =
   ( App m (Abs "x" (Abs "y" (Var "x")))
