@@ -1,8 +1,8 @@
 module LambdaCalculus.SimplyTyped.HindleyMilner where
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Maybe (MaybeT(MaybeT))
-import Control.Monad.Trans.State.Strict (State)
+import Control.Monad.Trans.Maybe (MaybeT(MaybeT), runMaybeT)
+import Control.Monad.Trans.State.Strict (State, evalState)
 import LambdaCalculus.SimplyTyped.HindleyMilner.MGU (mgu)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
 import LambdaCalculus.Utils (at)
@@ -32,15 +32,20 @@ substPolyType x m = go []
   go _ (Mono t) = Mono $ substMonoType x m t
   go bound (ForAll a t) = ForAll a $ go (a:bound) t
 
+-- | Instantiates a 'MonoType' from a 'PolyType'.
+--
+-- Strips 'ForAll's and substitutes bound variables with fresh variables.
 inst :: PolyType -> State Counter MonoType
 inst (Mono t) = pure t
 inst (ForAll a t) = do
   x <- newvar
   inst $ substPolyType a x t
 
+-- | Comes up with a fresh variable.
 newvar :: State Counter MonoType
 newvar = State.state $ \counter -> (VarType $ "a" <> show counter, counter + 1)
 
+-- | Applies a set of substitutions to a mono type.
 subst :: Subst -> MonoType -> MonoType
 subst (Subst s) (VarType a) = case lookup a s of
   Just t -> t
@@ -48,23 +53,27 @@ subst (Subst s) (VarType a) = case lookup a s of
 subst _ (ConstType c) = ConstType c
 subst s (t :-> t') = subst s t :-> subst s t'
 
-infer :: [PolyType] -> Term -> MaybeT (State Counter) (MonoType, Subst)
-infer ctx (Var x) = do
+liftMaybe :: Monad m => Maybe a -> MaybeT m a
+liftMaybe = MaybeT . pure
+
+infer' :: [PolyType] -> Term -> MaybeT (State Counter) (MonoType, Subst)
+infer' ctx (Var x) = do
   s <- liftMaybe $ at (x-1) ctx
   t <- lift $ inst s
   pure (t, mempty)
-infer _ (Const t _) = pure (t, mempty)
-infer ctx (App e0 e1) = do
-  (t0, s0) <- infer ctx e0
-  (t1, s1) <- infer ctx e1
+infer' _ (Const t _) = pure (t, mempty)
+infer' ctx (App e0 e1) = do
+  (t0, s0) <- infer' ctx e0
+  (t1, s1) <- infer' ctx e1
   t' <- lift newvar
   s2 <- liftMaybe $ mgu (subst s1 t0) (t1 :-> t')
   pure $ (subst s2 t', s2 <> s1 <> s0)
-infer ctx (Abs e) = do
+infer' ctx (Abs e) = do
   t <- lift newvar
-  (t', s) <- infer (Mono t:ctx) e
+  (t', s) <- infer' (Mono t:ctx) e
   pure $ (subst s t :-> t', s)
 -- there is no let polymorphism
 
-liftMaybe :: Monad m => Maybe a -> MaybeT m a
-liftMaybe = MaybeT . pure
+-- | Infers the principal type of a term.
+infer :: Term -> Maybe MonoType
+infer m = fmap fst $ flip evalState 0 $ runMaybeT $ infer' [] m
