@@ -2,7 +2,6 @@
 module LambdaCalculus.SimplyTyped.HindleyMilner.MGU where
 
 import Control.Monad (mzero)
-import Data.List (nub)
 import Data.Tuple (swap)
 import Data.Tuple.Extra (both, second)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
@@ -11,7 +10,7 @@ import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
 mgu :: MonoType -> MonoType -> Maybe Subst
 mgu = \t t' -> go $ S [(t, t')] []
   where
-  go (S [] acc) = pure $ Subst $ nub acc
+  go (S [] acc) = pure $ Subst acc
   go (S (gh:gt) acc) = case gh of
     (t, t') | t == t' -> go $ S gt acc
     (VarType x, t')
