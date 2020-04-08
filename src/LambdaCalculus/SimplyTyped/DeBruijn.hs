@@ -56,7 +56,7 @@ data Term
   = Var Int                -- ^ A variable (starts at @1@)
   | Abs (Maybe Type) Term  -- ^ An abstraction with an optional explicit type annotation
   | App Term Term          -- ^ An application
-  | Const BaseType String  -- ^ A constant
+  | Const Type String      -- ^ A constant
   deriving (Eq, Generic, NFData, Show)
 
 -- | Traverses sub-terms in depth-first, pre-order.
@@ -65,8 +65,6 @@ data Term
 -- > preview (ix i) == Just (index i)
 --
 -- See also 'ixBound'.
---
--- TODO make sure that @instance At Term@ does *not* form a "reasonable instance"
 instance Ixed Term where
   ix :: Int -> Traversal' Term Term
   ix i f = ixBound i (f . boundTerm)
@@ -168,7 +166,7 @@ ixBound = loop 0
 -- TODO Allow @App@ (consider the size)
 -- TODO Allow @Const@
 -- TODO add another implementation which always yields a well-typed Terms
-genTerm :: NonEmpty Type -> [(BaseType, String)] -> Int -> Gen Term
+genTerm :: NonEmpty Type -> [(Type, String)] -> Int -> Gen Term
 genTerm types constants freeNum = do
   -- see LambdaCalculus.Term.genTerm for explanation of the probability
   size <- max 1 <$> Q.getSize
@@ -198,19 +196,19 @@ genTerm types constants freeNum = do
 -- | Generates a modified 'Term'.
 --
 -- Picks a random sub-term and replaces it with a fresh one.
-genModifiedTerm :: NonEmpty Type -> [(BaseType, String)] -> Int -> Term -> Gen Term
+genModifiedTerm :: NonEmpty Type -> [(Type, String)] -> Int -> Term -> Gen Term
 genModifiedTerm types constants freeNum m = do
   i <- Q.choose (0, countTerm m - 1)
   flip (ixBound i) m $ \BoundTerm{boundNum} -> genTerm types constants $ boundNum + freeNum
 
 -- | Generates a closed 'Term'.
-genClosedTerm :: NonEmpty Type -> [(BaseType, String)] -> Gen Term
+genClosedTerm :: NonEmpty Type -> [(Type, String)] -> Gen Term
 genClosedTerm types constants = genTerm types constants 0
 
 -- | A class for phantom types to control instances of 'Arbitrary'.
 class TypeSet a where
   candidateTypes :: proxy a -> NonEmpty Type
-  candidateConsts :: proxy a -> [(BaseType, String)]
+  candidateConsts :: proxy a -> [(Type, String)]
 
 -- | A closed lambda term. This assumption allows more type instances to be defined.
 --
@@ -266,7 +264,7 @@ typeOf
   -> Term
   -> Maybe Type
 typeOf ctx (Var x) = at (x-1) ctx
-typeOf _ (Const t _) = pure (BaseType t)
+typeOf _ (Const t _) = pure t
 typeOf ctx (Abs mt m) = mt >>= \t -> typeOf (t:ctx) m >>= pure . FuncType t
 typeOf ctx (App m n) = do
   FuncType s t <- typeOf ctx m
@@ -287,7 +285,7 @@ bidirectionalTypeSynth
   -> Term
   -> Maybe Type
 bidirectionalTypeSynth ctx (Var x) = at (x-1) ctx
-bidirectionalTypeSynth _ (Const t _) = pure (BaseType t)
+bidirectionalTypeSynth _ (Const t _) = pure t
 bidirectionalTypeSynth ctx (Abs mt m) = mt >>= \t -> bidirectionalTypeSynth (t:ctx) m >>= pure . (t :->)
 bidirectionalTypeSynth ctx (App m n) = do
   s :-> t <- bidirectionalTypeSynth ctx m
