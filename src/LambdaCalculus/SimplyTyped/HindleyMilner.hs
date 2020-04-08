@@ -56,6 +56,9 @@ subst s (t :-> t') = subst s t :-> subst s t'
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe = MaybeT . pure
 
+-- | The implementation of 'infer'.
+--
+-- Implemented by the Algorithm W.
 infer' :: [PolyType] -> Term -> MaybeT (State Counter) (MonoType, Subst)
 infer' ctx (Var x) = do
   s <- liftMaybe $ at (x-1) ctx
@@ -76,4 +79,4 @@ infer' ctx (Abs e) = do
 
 -- | Infers the principal type of a term.
 infer :: Term -> Maybe MonoType
-infer m = fmap fst $ flip evalState 0 $ runMaybeT $ infer' [] m
+infer = fmap fst . flip evalState 0 . runMaybeT . infer' []
