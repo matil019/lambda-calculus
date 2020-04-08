@@ -74,7 +74,7 @@ infer' ctx (App e0 e1) = do
 infer' ctx (Abs e) = do
   t <- lift newvar
   (t', s) <- infer' (Mono t:ctx) e
-  pure $ (subst s t :-> t', s)
+  pure $ (subst s $ t :-> t', s)
 -- there is no let polymorphism
 
 -- | Infers the principal type of a term.
