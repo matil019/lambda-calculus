@@ -14,12 +14,9 @@ data PolyType
   = Mono MonoType
   | ForAll VarType PolyType
 
-data Var = VarCon () -- TODO
-  deriving Eq
-
 data Term
-  = Var Var                -- ^ A variable (must start at @1@)
-  | Abs Var Term  -- ^ An abstraction with an optional explicit type annotation
+  = Var Int                -- ^ A variable (must start at @1@)
+  | Abs Term               -- ^ An abstraction
   | App Term Term          -- ^ An application
   | Const MonoType String  -- ^ A constant
   -- deriving (Eq, Generic, NFData, Show)

@@ -5,6 +5,7 @@ import Control.Monad.Trans.Maybe (MaybeT(MaybeT))
 import Control.Monad.Trans.State.Strict (State)
 import LambdaCalculus.SimplyTyped.HindleyMilner.MGU (mgu)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
+import LambdaCalculus.Utils (at)
 
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified LambdaCalculus.SimplyTyped.HindleyMilner.MGU as MGU
@@ -47,9 +48,9 @@ subst (Subst s) (VarType a) = case lookup a s of
 subst _ (ConstType c) = ConstType c
 subst s (t :-> t') = subst s t :-> subst s t'
 
-infer :: [(Var, PolyType)] -> Term -> MaybeT (State Counter) (MonoType, Subst)
+infer :: [PolyType] -> Term -> MaybeT (State Counter) (MonoType, Subst)
 infer ctx (Var x) = do
-  s <- liftMaybe $ lookup x ctx
+  s <- liftMaybe $ at (x-1) ctx
   t <- lift $ inst s
   pure (t, mempty)
 infer _ (Const t _) = pure (t, mempty)
@@ -59,9 +60,9 @@ infer ctx (App e0 e1) = do
   t' <- lift newvar
   s2 <- liftMaybe $ mgu (subst s1 t0) (t1 :-> t')
   pure $ (subst s2 t', s2 <> s1 <> s0)
-infer ctx (Abs x e) = do
+infer ctx (Abs e) = do
   t <- lift newvar
-  (t', s) <- infer ((x,Mono t):ctx) e
+  (t', s) <- infer (Mono t:ctx) e
   pure $ (subst s t :-> t', s)
 -- there is no let polymorphism
 
