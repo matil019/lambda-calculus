@@ -16,8 +16,6 @@ import qualified LambdaCalculus.SimplyTyped.HindleyMilner.MGU as MGU
 -- where @a@ is some monotype decided by "the user".
 -- this is the Rank-1 type.
 
--- TODO remove ForAll constructor because it is not introduced at all?
-
 -- | A counter to generate fresh variables
 type Counter = Int
 
@@ -79,4 +77,9 @@ infer' ctx (Abs e) = do
 
 -- | Infers the principal type of a term.
 infer :: Term -> Maybe MonoType
-infer = fmap fst . flip evalState 0 . runMaybeT . infer' []
+infer = fmap fst . flip evalState 0 . runMaybeT . infer' freeVarTypes
+  where
+  -- this is needed to allow types of free variables to be inferred;
+  -- if it were @[]@, @infer (Var 1)@ would be @Nothing@, but thanks to this,
+  -- @infer (Var 1)@ is @Just (VarType "a0")@ as expected.
+  freeVarTypes = repeat $ ForAll "a" (Mono (VarType "a"))
