@@ -30,4 +30,12 @@ data Term
 
 newtype Subst = Subst [(VarType, MonoType)]
   deriving (Eq, Show)
-  deriving newtype (Monoid, NFData, Semigroup)
+  deriving newtype (Monoid, NFData)
+
+-- | @a <> b@ merges substitutions in the same way as function composition
+--
+-- In other words, @subst (a <> b) == subst a . subst b@  TODO test this
+--
+-- For efficiency, the wrapped lists are concatenated in the /reverse order/
+instance Semigroup Subst where
+  Subst a <> Subst b = Subst (b <> a)

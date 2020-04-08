@@ -3,6 +3,7 @@ module LambdaCalculus.SimplyTyped.HindleyMilner where
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(MaybeT), runMaybeT)
 import Control.Monad.Trans.State.Strict (State, evalState)
+import Data.List (foldl')
 import LambdaCalculus.SimplyTyped.HindleyMilner.MGU (mgu)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
 import LambdaCalculus.Utils (at)
@@ -45,11 +46,14 @@ newvar = State.state $ \counter -> (VarType $ "a" <> show counter, counter + 1)
 
 -- | Applies a set of substitutions to a mono type.
 subst :: Subst -> MonoType -> MonoType
-subst (Subst s) (VarType a) = case lookup a s of
-  Just t -> t
-  Nothing -> VarType a
-subst _ (ConstType c) = ConstType c
-subst s (t :-> t') = subst s t :-> subst s t'
+subst = \(Subst ss) t0 -> foldl' (flip subst1) t0 ss
+  where
+  subst1 :: (VarType, MonoType) -> MonoType -> MonoType
+  subst1 (a, t) (VarType b)
+    | a == b    = t
+    | otherwise = VarType b
+  subst1 _ (ConstType c) = ConstType c
+  subst1 s (t :-> t') = subst1 s t :-> subst1 s t'
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe = MaybeT . pure
