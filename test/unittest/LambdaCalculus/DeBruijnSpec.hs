@@ -1,6 +1,6 @@
 module LambdaCalculus.DeBruijnSpec where
 
-import Control.Lens (ix, preview, set, toListOf)
+import Control.Lens (ix, toListOf)
 import LambdaCalculus.DeBruijn
 import LambdaCalculus.Genetic (genCrossover, genMutant)
 import LambdaCalculus.Utils (FiniteList(FiniteList))
@@ -80,23 +80,3 @@ spec = do
     it "genMutant should return a closed term" $ forAll (arbitrary >>= \m -> genMutant m >>= \m' -> pure (m, m')) $ \(m, m') -> do
       m  `shouldSatisfy` isReallyClosed
       m' `shouldSatisfy` isReallyClosed
-
-  describe "index implementations" $ do
-    it "index2 == index" $ forAll genTermAndIndex $ \(m, i) ->
-      index2 i m `shouldBe` index i m
-
-    it "index3 == index" $ forAll genTermAndIndex $ \(m, i) ->
-      index3 i m `shouldBe` index i m
-
-    it "index4 == index" $ forAll genTermAndIndex $ \(m, i) ->
-      index4 i m `shouldBe` index i m
-
-  describe "ixBound implementations" $ do
-    let ix2 i f = ixBound2 i (f . boundTerm)
-
-    it "preview ixBound2 == preview ixBound" $ forAll genTermAndIndex $ \(m, i) ->
-      preview (ix2 i) m `shouldBe` preview (ix i) m
-
-    it "set ixBound2 == set ixBound" $ forAll ((,) <$> genTermAndIndex <*> arbitrary)
-      $ \((m, i), AnyTerm (_, n)) ->
-        set (ix2 i) n m `shouldBe` set (ix i) n m
