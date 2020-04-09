@@ -6,7 +6,7 @@ import LambdaCalculus.Genetic (genCrossover, genMutant)
 import LambdaCalculus.Utils (FiniteList(FiniteList))
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Arbitrary, arbitrary, forAll)
+import Test.QuickCheck (Arbitrary, Gen, arbitrary, forAll)
 
 import qualified Data.List.NonEmpty as NE
 import qualified LambdaCalculus.Term as Term
@@ -25,6 +25,13 @@ instance Arbitrary AnyTerm where
     m <- genTerm freeNum
     pure $ AnyTerm (freeNum, m)
 
+genTermAndIndex :: Gen (Term, Int)
+genTermAndIndex = do
+  AnyTerm (_, m) <- arbitrary
+  let c = countTerm m
+  i <- Q.choose (0, c-1)
+  pure (m, i)
+
 spec :: Spec
 spec = do
   prop "(isClosed . unClosedTerm) m" $ \m ->
@@ -40,12 +47,7 @@ spec = do
     index 0 m `shouldBe` Just m
 
   it "index i m == Just (toList m !! i)" $
-    let gen = do
-          AnyTerm (_, m) <- arbitrary
-          let c = countTerm m
-          i <- Q.choose (0, c-1)
-          pure (m, i)
-    in forAll gen $ \(m, i) -> index i m == Just (toList m !! i)
+    forAll genTermAndIndex $ \(m, i) -> index i m == Just (toList m !! i)
 
   prop "ix is consistent with linear" $ \(AnyTerm (_, m)) ->
     NE.toList (linear m) `shouldBe` [ n | i <- [0..(countTerm m)], n <- toListOf (ix i) m ]
@@ -78,3 +80,13 @@ spec = do
     it "genMutant should return a closed term" $ forAll (arbitrary >>= \m -> genMutant m >>= \m' -> pure (m, m')) $ \(m, m') -> do
       m  `shouldSatisfy` isReallyClosed
       m' `shouldSatisfy` isReallyClosed
+
+  describe "index implementations" $ do
+    it "index2 == index" $ forAll genTermAndIndex $ \(m, i) ->
+      index2 i m `shouldBe` index i m
+
+    it "index3 == index" $ forAll genTermAndIndex $ \(m, i) ->
+      index3 i m `shouldBe` index i m
+
+    it "index4 == index" $ forAll genTermAndIndex $ \(m, i) ->
+      index4 i m `shouldBe` index i m

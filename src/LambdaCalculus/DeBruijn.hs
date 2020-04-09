@@ -192,9 +192,11 @@ index3 i m
       Var _ -> Nothing
       Abs n -> index3 (i-1) n
       App n1 n2
-        | i' < countTerm n1 -> index3 i' n1
-        | otherwise -> index3 i' n2
-        where i' = i - 1
+        | i' < cn1 -> index3 i' n1
+        | otherwise -> index3 (i'-cn1) n2
+        where
+        cn1 = countTerm n1
+        i' = i - 1
 
 index4 :: Int -> Term -> Maybe Term
 index4 i m = preview (\f -> ixBound2 i (f . boundTerm)) m
