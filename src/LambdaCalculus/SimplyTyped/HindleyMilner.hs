@@ -32,6 +32,9 @@ substPolyType x m = go []
   go _ (Mono t) = Mono $ substMonoType x m t
   go bound (ForAll a t) = ForAll a $ go (a:bound) t
 
+substCtx :: Subst -> [PolyType] -> [PolyType]
+substCtx (Subst ss) = map $ \t0 -> foldl' (flip $ uncurry substPolyType) t0 ss
+
 -- | Instantiates a 'MonoType' from a 'PolyType'.
 --
 -- Strips 'ForAll's and substitutes bound variables with fresh variables.
@@ -47,14 +50,7 @@ newvar = State.state $ \counter -> (VarType $ "a" <> show counter, counter + 1)
 
 -- | Applies a set of substitutions to a mono type.
 subst :: Subst -> MonoType -> MonoType
-subst = \(Subst ss) t0 -> foldl' (flip subst1) t0 ss
-  where
-  subst1 :: (VarType, MonoType) -> MonoType -> MonoType
-  subst1 (a, t) (VarType b)
-    | a == b    = t
-    | otherwise = VarType b
-  subst1 _ (ConstType c) = ConstType c
-  subst1 s (t :-> t') = subst1 s t :-> subst1 s t'
+subst (Subst ss) t0 = foldl' (flip $ uncurry substMonoType) t0 ss
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe = MaybeT . pure
@@ -70,7 +66,7 @@ infer' ctx (Var x) = do
 infer' _ (Const t _) = pure (t, mempty)
 infer' ctx (App e0 e1) = do
   (t0, s0) <- infer' ctx e0
-  (t1, s1) <- infer' ctx e1
+  (t1, s1) <- infer' (substCtx s0 ctx) e1
   t' <- lift newvar
   s2 <- liftMaybe $ mgu (subst s1 t0) (t1 :-> t')
   pure $ (subst s2 t', s2 <> s1 <> s0)
