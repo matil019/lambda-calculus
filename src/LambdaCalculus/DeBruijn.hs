@@ -181,6 +181,9 @@ toList = NE.toList . linear
 index :: Int -> Term -> Maybe Term
 index i m = at i (toList m)
 
+index2 :: Int -> Term -> Maybe Term
+index2 i m = preview (ix i) m
+
 -- | An 'ix' for 'Term' with an additional info. (See 'BoundTerm')
 ixBound :: Int -> Traversal Term Term BoundTerm Term
 ixBound = loop 0
