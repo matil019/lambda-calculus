@@ -1,6 +1,6 @@
 module LambdaCalculus.DeBruijnSpec where
 
-import Control.Lens (ix, toListOf)
+import Control.Lens (ix, preview, set, toListOf)
 import LambdaCalculus.DeBruijn
 import LambdaCalculus.Genetic (genCrossover, genMutant)
 import LambdaCalculus.Utils (FiniteList(FiniteList))
@@ -90,3 +90,13 @@ spec = do
 
     it "index4 == index" $ forAll genTermAndIndex $ \(m, i) ->
       index4 i m `shouldBe` index i m
+
+  describe "ixBound implementations" $ do
+    let ix2 i f = ixBound2 i (f . boundTerm)
+
+    it "preview ixBound2 == preview ixBound" $ forAll genTermAndIndex $ \(m, i) ->
+      preview (ix2 i) m `shouldBe` preview (ix i) m
+
+    it "set ixBound2 == set ixBound" $ forAll ((,) <$> genTermAndIndex <*> arbitrary)
+      $ \((m, i), AnyTerm (_, n)) ->
+        set (ix2 i) n m `shouldBe` set (ix i) n m
