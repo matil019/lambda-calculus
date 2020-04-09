@@ -16,6 +16,17 @@ data MonoType
   deriving (Eq, Generic, NFData, Show)
 infixr 1 :->
 
+formatMonoType :: MonoType -> String
+formatMonoType (VarType x) = x
+formatMonoType (ConstType c) = c
+formatMonoType (t :-> u) =
+  decorate (formatMonoType t) <> " -> " <> formatMonoType u
+  where
+  decorate = case t of
+    VarType   _ -> id
+    ConstType _ -> id
+    _ :-> _     -> \s -> "(" <> s <> ")"
+
 data PolyType
   = Mono MonoType
   | ForAll VarType PolyType
