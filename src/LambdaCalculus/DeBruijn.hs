@@ -128,12 +128,6 @@ countTerm (Var _) = 1
 countTerm (Abs m) = 1 + countTerm m
 countTerm (App m n) = 1 + countTerm m + countTerm n
 
--- | Counts a number of sub-terms in a 'Term'.
---
--- TODO make sure that @countTerm == countTerm2@
-countTerm2 :: Term -> Int
-countTerm2 = length . toList
-
 -- | Is this 'Term' closed (i.e. has no free variables)?
 --
 -- TODO consider implementing this with the lenses (bench)
