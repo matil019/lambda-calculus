@@ -45,18 +45,22 @@ main = defaultMain
                 in
                 [ bench "index"    $ nf (map (\(term, _) -> DeBruijn.index  (mid term) term)) terms
                 , bench "index2"   $ nf (map (\(term, _) -> DeBruijn.index2 (mid term) term)) terms
+                , bench "index3"   $ nf (map (\(term, _) -> DeBruijn.index3 (mid term) term)) terms
                 ]
             , bgroup "head"
                 [ bench "index"    $ nf (map (\(term, _) -> DeBruijn.index  0 term)) terms
                 , bench "index2"   $ nf (map (\(term, _) -> DeBruijn.index2 0 term)) terms
+                , bench "index3"   $ nf (map (\(term, _) -> DeBruijn.index3 0 term)) terms
                 ]
             , bgroup "last"
                 [ bench "index"    $ nf (map (\(term, _) -> DeBruijn.index  (DeBruijn.countTerm term - 1) term)) terms
                 , bench "index2"   $ nf (map (\(term, _) -> DeBruijn.index2 (DeBruijn.countTerm term - 1) term)) terms
+                , bench "index3"   $ nf (map (\(term, _) -> DeBruijn.index3 (DeBruijn.countTerm term - 1) term)) terms
                 ]
             , bgroup "random"
                 [ bench "index"    $ nf (map (\(term, i) -> DeBruijn.index  i term)) terms
                 , bench "index2"   $ nf (map (\(term, i) -> DeBruijn.index2 i term)) terms
+                , bench "index3"   $ nf (map (\(term, i) -> DeBruijn.index3 i term)) terms
                 ]
             ]
       , env (fmap (map $ snd . DeBruijn.toDeBruijn mempty) $ Q.generate $ replicateM 100 $ Term.unClosedTerm <$> Q.arbitrary) $ \terms ->
@@ -66,6 +70,7 @@ main = defaultMain
             [ bench "toList (baseline)" $ nf (map DeBruijn.toList) terms
             , bench "index"    $ nf (map $ allof DeBruijn.index) terms
             , bench "index2"   $ nf (map $ allof DeBruijn.index2) terms
+            , bench "index3"   $ nf (map $ allof DeBruijn.index3) terms
             ]
       ]
   ]
