@@ -196,6 +196,9 @@ index3 i m
         | otherwise -> index3 i' n2
         where i' = i - 1
 
+index4 :: Int -> Term -> Maybe Term
+index4 i m = preview (\f -> ixBound2 i (f . boundTerm)) m
+
 -- | An 'ix' for 'Term' with an additional info. (See 'BoundTerm')
 ixBound :: Int -> Traversal Term Term BoundTerm Term
 ixBound = loop 0
@@ -209,6 +212,23 @@ ixBound = loop 0
         Var _ -> pure m
         Abs n -> Abs <$> loop (boundNum + 1) (i-1) f n
         App n1 n2 -> App <$> loop boundNum (i-1) f n1 <*> loop boundNum (i-1-(countTerm n1)) f n2
+
+ixBound2 :: Int -> Traversal Term Term BoundTerm Term
+ixBound2 = loop 0
+  where
+  loop :: Applicative f => Int -> Int -> (BoundTerm -> f Term) -> Term -> f Term
+  loop boundNum i f m
+    | i == 0 = f (BoundTerm{boundTerm = m, boundNum})
+    | i < 0 = pure m
+    | otherwise = case m of
+        Var _ -> pure m
+        Abs n -> Abs <$> loop (boundNum + 1) (i-1) f n
+        App n1 n2
+          | i' < cn1  -> flip App n2 <$> loop boundNum i' f n1
+          | otherwise -> App n1 <$> loop boundNum (i'-cn1) f n2
+          where
+          i' = i - 1
+          cn1 = countTerm n1
 
 -- | Generates a 'Term' with a specified number of free variables.
 --
