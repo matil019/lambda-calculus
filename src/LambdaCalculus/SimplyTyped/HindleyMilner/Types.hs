@@ -21,13 +21,6 @@ data PolyType
   | ForAll VarType PolyType
   deriving (Eq, Generic, NFData, Show)
 
-data Term
-  = Var Int                -- ^ A variable (must start at @1@)
-  | Abs Term               -- ^ An abstraction
-  | App Term Term          -- ^ An application
-  | Const MonoType String  -- ^ A constant
-  deriving (Eq, Generic, NFData, Show)
-
 newtype Subst = Subst [(VarType, MonoType)]
   deriving (Eq, Show)
   deriving newtype (Monoid, NFData)

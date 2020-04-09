@@ -5,6 +5,7 @@ import Control.Monad.Trans.Maybe (MaybeT(MaybeT), runMaybeT)
 import Control.Monad.Trans.State.Strict (State, evalState)
 import Data.List (foldl')
 import LambdaCalculus.SimplyTyped.HindleyMilner.MGU (mgu)
+import LambdaCalculus.SimplyTyped.HindleyMilner.Term -- TODO no all-in import
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
 import LambdaCalculus.Utils (at)
 
