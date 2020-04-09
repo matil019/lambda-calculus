@@ -19,10 +19,15 @@ benches terms =
 main :: IO ()
 main = defaultMain
   [ env (Q.generate $ replicateM 100 $ Term.unClosedTerm <$> Q.arbitrary) $ \terms ->
-      bgroup "bench"
+      bgroup "reduce"
       [ bgroup "Term" $ benches terms
       -- TODO make sure that DeBruijn terms actually reduce the same as the other notation
       , bgroup "DeBruijn"  $ benches $ map (snd . DeBruijn.toDeBruijn mempty) terms
       , bgroup "DeBruijn2" $ benches $ map (snd . DeBruijn2.toDeBruijn mempty) terms
       ]
+  , env (fmap (map $ snd . DeBruijn.toDeBruijn mempty) $ Q.generate $ replicateM 100 $ Term.unClosedTerm <$> Q.arbitrary) $ \terms ->
+      bgroup "countTerm"
+        [ bench "countTerm"  $ nf (map DeBruijn.countTerm)  terms
+        , bench "countTerm2" $ nf (map DeBruijn.countTerm2) terms
+        ]
   ]
