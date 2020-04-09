@@ -184,6 +184,18 @@ index i m = at i (toList m)
 index2 :: Int -> Term -> Maybe Term
 index2 i m = preview (ix i) m
 
+index3 :: Int -> Term -> Maybe Term
+index3 i m
+  | i == 0 = Just m
+  | i < 0 = Nothing
+  | otherwise = case m of
+      Var _ -> Nothing
+      Abs n -> index3 (i-1) n
+      App n1 n2
+        | i' < countTerm n1 -> index3 i' n1
+        | otherwise -> index3 i' n2
+        where i' = i - 1
+
 -- | An 'ix' for 'Term' with an additional info. (See 'BoundTerm')
 ixBound :: Int -> Traversal Term Term BoundTerm Term
 ixBound = loop 0
