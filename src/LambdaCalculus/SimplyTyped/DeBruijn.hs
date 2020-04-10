@@ -10,7 +10,6 @@ module LambdaCalculus.SimplyTyped.DeBruijn where
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal', ix, preview, set)
 import Data.Conduit (ConduitT)
-import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(Proxy))
 import Data.Tuple.Extra (dupe)
@@ -21,8 +20,9 @@ import Numeric.Natural (Natural)
 import Test.QuickCheck (Arbitrary, Gen)
 
 import qualified Data.Conduit.Combinators as C
-import qualified Data.List.NonEmpty as NE
 import qualified LambdaCalculus.Genetic
+import qualified LambdaCalculus.SimplyTyped.HindleyMilner.Term as HM -- TODO make unqualified
+import qualified LambdaCalculus.SimplyTyped.HindleyMilner.Types as HM -- TODO make unqualified
 import qualified Test.QuickCheck as Q
 
 -- TODO lots of functions were copy-pasted from untyped DeBruijn.
@@ -37,10 +37,8 @@ import qualified Test.QuickCheck as Q
 -- TODO Allow @App@ (consider the size)
 -- TODO Allow @Const@
 -- TODO add another implementation which always yields a well-typed Terms
--- genTerm :: [(MonoType, String)] -> Int -> Gen Term
--- genTerm constants freeNum = do
-genTerm :: NonEmpty Type -> [(Type, String)] -> Int -> Gen Term
-genTerm types constants freeNum = do
+genTerm :: [(HM.MonoType, String)] -> Int -> Gen HM.Term
+genTerm constants freeNum = do
   -- see LambdaCalculus.Term.genTerm for explanation of the probability
   size <- max 1 <$> Q.getSize
   case () of
@@ -55,79 +53,70 @@ genTerm types constants freeNum = do
           Q.frequency [(p, genConst), (p, genVar), (q, genAbs), (q, genApp)]
   where
   -- 1 term
-  genConst = uncurry Const <$> Q.elements constants
+  genConst = uncurry HM.Const <$> Q.elements constants
   -- 1 term
-  genVar = Var <$> Q.choose (1, freeNum)
+  genVar = HM.Var <$> Q.choose (1, freeNum)
   -- X + 1 terms
-  genAbs = do
-    -- TODO generate function-type parameter e.g. (\[o->o] \[o] 2 1)
-    t <- Q.liftArbitrary $ Q.elements $ NE.toList types
-    Abs t <$> genTerm types constants (freeNum+1)
+  genAbs = HM.Abs <$> genTerm constants (freeNum+1)
   -- 2X + 1 terms
-  genApp = App <$> genTerm types constants freeNum <*> genTerm types constants freeNum
+  genApp = HM.App <$> genTerm constants freeNum <*> genTerm constants freeNum
 
 -- | Generates a modified 'Term'.
 --
 -- Picks a random sub-term and replaces it with a fresh one.
-genModifiedTerm :: NonEmpty Type -> [(Type, String)] -> Int -> Term -> Gen Term
-genModifiedTerm types constants freeNum m = do
-  i <- Q.choose (0, countTerm m - 1)
-  flip (ixBound i) m $ \BoundTerm{boundNum} -> genTerm types constants $ boundNum + freeNum
+genModifiedTerm :: [(HM.MonoType, String)] -> Int -> HM.Term -> Gen HM.Term
+genModifiedTerm constants freeNum m = do
+  i <- Q.choose (0, HM.countTerm m - 1)
+  flip (HM.ixBound i) m $ \HM.BoundTerm{HM.boundNum} -> genTerm constants $ boundNum + freeNum
 
 -- | Generates a closed 'Term'.
-genClosedTerm :: NonEmpty Type -> [(Type, String)] -> Gen Term
-genClosedTerm types constants = genTerm types constants 0
+genClosedTerm :: [(HM.MonoType, String)] -> Gen HM.Term
+genClosedTerm constants = genTerm constants 0
 
 -- | A class for phantom types to control instances of 'Arbitrary'.
 class TypeSet a where
-  candidateTypes :: proxy a -> NonEmpty Type
-  candidateConsts :: proxy a -> [(Type, String)]
+  candidateConsts :: proxy a -> [(HM.MonoType, String)]
 
 -- | A closed lambda term. This assumption allows more type instances to be defined.
 --
 -- The phantom type controls instances of 'Arbitrary'. See 'TypeSet'.
-newtype ClosedTerm a = ClosedTerm { unClosedTerm :: Term }
+newtype ClosedTerm a = ClosedTerm { unClosedTerm :: HM.Term }
   deriving (Eq, Generic, NFData, Show)
 
 instance TypeSet a => Arbitrary (ClosedTerm a) where
-  arbitrary = ClosedTerm <$> genClosedTerm
-    (candidateTypes (Proxy :: Proxy a))
-    (candidateConsts (Proxy :: Proxy a))
+  arbitrary = ClosedTerm <$> genClosedTerm (candidateConsts (Proxy :: Proxy a))
 
 instance Ixed (ClosedTerm a) where
-  ix :: Int -> Traversal' (ClosedTerm a) Term
+  ix :: Int -> Traversal' (ClosedTerm a) HM.Term
   ix i f = fmap ClosedTerm . ix i f . unClosedTerm
 
 type instance Index (ClosedTerm a) = Int
-type instance IxValue (ClosedTerm a) = Term
+type instance IxValue (ClosedTerm a) = HM.Term
 
 instance TypeSet a => Genetic (ClosedTerm a) where
   -- TODO always generate well-typed terms?
   genCrossover p12@(ClosedTerm parent1, ClosedTerm parent2) = do
-    i1 <- Q.choose (0, countTerm parent1 - 1)
-    i2 <- Q.choose (0, countTerm parent2 - 1)
+    i1 <- Q.choose (0, HM.countTerm parent1 - 1)
+    i2 <- Q.choose (0, HM.countTerm parent2 - 1)
     let sub1 = preview (ixBound' i1) parent1
         sub2 = preview (ixBound' i2) parent2
-        child1 = maybe id (set (ix i1) . boundTerm) sub2 $ parent1
-        child2 = maybe id (set (ix i2) . boundTerm) sub1 $ parent2
+        child1 = maybe id (set (ix i1) . HM.boundTerm) sub2 $ parent1
+        child2 = maybe id (set (ix i2) . HM.boundTerm) sub1 $ parent2
     -- retry if not swappable TODO implement without retrying
     if fromMaybe False $ swappable <$> sub1 <*> sub2
       then pure (ClosedTerm child1, ClosedTerm child2)
       else genCrossover p12
     where
-    ixBound' :: Int -> Traversal' Term BoundTerm
-    ixBound' i f = ixBound i (fmap boundTerm . f)
+    ixBound' :: Int -> Traversal' HM.Term HM.BoundTerm
+    ixBound' i f = HM.ixBound i (fmap HM.boundTerm . f)
     -- for terms to be closed after swapping, the number of free variables in
     -- swapped sub-terms must not increase.
     -- the certain set of inequal equations reduces to this simple one.
-    swappable :: BoundTerm -> BoundTerm -> Bool
-    swappable m n = boundNum m == boundNum n
+    swappable :: HM.BoundTerm -> HM.BoundTerm -> Bool
+    swappable m n = HM.boundNum m == HM.boundNum n
 
   genMutant = fmap ClosedTerm
-    . genModifiedTerm
-        (candidateTypes (Proxy :: Proxy a))
-        (candidateConsts (Proxy :: Proxy a))
-        0
+    . genModifiedTerm (candidateConsts (Proxy :: Proxy a)) 0
     . unClosedTerm
 
 -- | A well-typed 'Term'. (i.e. a Term which has been typechecked)
