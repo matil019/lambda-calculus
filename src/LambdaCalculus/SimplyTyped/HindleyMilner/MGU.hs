@@ -2,6 +2,7 @@
 module LambdaCalculus.SimplyTyped.HindleyMilner.MGU where
 
 import Control.Monad (mzero)
+import Data.List (nub)
 import Data.Tuple (swap)
 import Data.Tuple.Extra (both, second)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
@@ -27,9 +28,11 @@ mgu = \t t' -> go $ S [(t, t')] []
 data MGUState = S [(MonoType, MonoType)] [(VarType, MonoType)]
 
 vars :: MonoType -> [VarType]
-vars (VarType a) = [a]
-vars (ConstType _) = []
-vars (t :-> t') = vars t <> vars t'
+vars = nub . go
+  where
+  go (VarType a) = [a]
+  go (ConstType _) = []
+  go (t :-> t') = go t <> go t'
 
 -- | @subst x m t@ substitutes all occurences of @x@ in @t@ by @m@.
 subst :: VarType -> MonoType -> MonoType -> MonoType
