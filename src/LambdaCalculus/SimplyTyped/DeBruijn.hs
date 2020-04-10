@@ -159,9 +159,9 @@ interpretChurchNumber = \m ->
   go (HM.App (HM.Var 2) n) = fmap (1+) $ go n
   go _ = Nothing
 
-encodeChurchNumber :: Type -> Natural -> Term
-encodeChurchNumber t n =
-  Abs (Just (t :-> t)) $ Abs (Just t) $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
+encodeChurchNumber :: Natural -> HM.Term
+encodeChurchNumber n =
+  HM.Abs $ HM.Abs $ iterate (HM.App (HM.Var 2)) (HM.Var 1) !! fromIntegral n
 
 -- | @interpretChurchPair m@ assumes @m@ to be a Church pair and extracts their elements.
 --
