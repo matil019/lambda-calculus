@@ -163,27 +163,11 @@ encodeChurchNumber :: Natural -> HM.Term
 encodeChurchNumber n =
   HM.Abs $ HM.Abs $ iterate (HM.App (HM.Var 2)) (HM.Var 1) !! fromIntegral n
 
--- | @interpretChurchPair m@ assumes @m@ to be a Church pair and extracts their elements.
+-- | Interprets a lambda term as a Church pair.
 --
--- A Church-encoded pair has a type @(a -> b -> c) -> c@ where @c@ is either @a@ or @b@.
--- @m@ is typechecked against it and if it doesn't, @Nothing@ is returned.
---
--- Note that if @Just (x, y)@ is returned, @x@ and/or @y@ may not typecheck.
---
--- As of now, for both of elements to typecheck, the types @a@, and @b@ above must
--- coincide. The reason is that 'Abs' requires an explicit type annotation. This rules
--- out terms whose types can change over context. @c@ must necessarily be fixed to
--- either @a@ or @b@ on typecheck.
--- So it may be a better idea to consider 'interpretChurchPair' as a function which
--- returns a _list_ whose length is up to 2, rather than a 2-tuple.
--- TODO add type variables and/or type inference to lift this restriction
---
--- TODO add a newtype which indicates a term is known to be well-typed and has that type
-interpretChurchPair :: Term -> Maybe (Term, Term)
-interpretChurchPair m = case typeOf [] m of
-  Just ((a :-> b :-> _) :-> _) ->
-    let first  = Abs (Just ((a :-> b :-> a) :-> a)) $ App (Var 1) (Abs (Just a) $ Abs (Just b) $ Var 2)
-        second = Abs (Just ((a :-> b :-> b) :-> b)) $ App (Var 1) (Abs (Just a) $ Abs (Just b) $ Var 1)
-    in
-    Just (App first m, App second m)
-  _ -> Nothing
+-- The argument can be a redex. Always returns redexes.
+interpretChurchPair :: HM.Term -> (HM.Term, HM.Term)
+interpretChurchPair m =
+  ( HM.App m (HM.Abs (HM.Abs (HM.Var 2)))
+  , HM.App m (HM.Abs (HM.Abs (HM.Var 1)))
+  )
