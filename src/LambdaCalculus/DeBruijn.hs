@@ -24,7 +24,7 @@ import Data.Maybe (fromMaybe)
 import Data.Tuple.Extra (dupe)
 import LambdaCalculus.Genetic (Genetic, genCrossover)
 import LambdaCalculus.InfList (InfList)
-import LambdaCalculus.Utils (FiniteList(FiniteList), at, unFiniteList)
+import LambdaCalculus.Utils (FiniteList(FiniteList), unFiniteList)
 import Numeric.Natural (Natural)
 import GHC.Generics (Generic)
 import Test.QuickCheck (Arbitrary, Gen)
@@ -129,8 +129,6 @@ countTerm (Abs m) = 1 + countTerm m
 countTerm (App m n) = 1 + countTerm m + countTerm n
 
 -- | Is this 'Term' closed (i.e. has no free variables)?
---
--- TODO consider implementing this with the lenses (bench)
 isClosed :: Term -> Bool
 isClosed = go 0
   where
@@ -173,7 +171,7 @@ toList = NE.toList . linear
 -- 'toList' m !! i == fromJust ('index' i m)
 -- @
 index :: Int -> Term -> Maybe Term
-index i m = at i (toList m)
+index i m = preview (ix i) m
 
 -- | An 'ix' for 'Term' with an additional info. (See 'BoundTerm')
 ixBound :: Int -> Traversal Term Term BoundTerm Term
@@ -183,11 +181,15 @@ ixBound = loop 0
   loop boundNum i f m
     | i == 0 = f (BoundTerm{boundTerm = m, boundNum})
     | i < 0 = pure m
-    | i >= countTerm m = pure m
     | otherwise = case m of
         Var _ -> pure m
         Abs n -> Abs <$> loop (boundNum + 1) (i-1) f n
-        App n1 n2 -> App <$> loop boundNum (i-1) f n1 <*> loop boundNum (i-1-(countTerm n1)) f n2
+        App n1 n2
+          | i' < cn1  -> flip App n2 <$> loop boundNum i' f n1
+          | otherwise -> App n1 <$> loop boundNum (i'-cn1) f n2
+          where
+          i' = i - 1
+          cn1 = countTerm n1
 
 -- | Generates a 'Term' with a specified number of free variables.
 --
