@@ -6,7 +6,7 @@ module LambdaCalculus.SimplyTyped.HindleyMilner where
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(MaybeT), runMaybeT)
 import Control.Monad.Trans.State.Strict (State, evalState)
-import Data.List (foldl')
+import Data.List (foldl', intersect)
 import Data.Maybe (isJust)
 import LambdaCalculus.SimplyTyped.HindleyMilner.MGU (mgu)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Term -- TODO no all-in import
@@ -90,5 +90,21 @@ infer = fmap fst . flip evalState 0 . runMaybeT . infer' freeVarTypes
   freeVarTypes = repeat $ ForAll "a" (Mono (VarType "a"))
 
 -- | Checks if two types are compatible (aka unify).
-check :: MonoType -> MonoType -> Bool
-check t u = isJust $ mgu t u
+--
+-- You may want to apply 'quantify' before 'check' if you wish to compare
+-- 'MonoType's.
+check :: PolyType -> PolyType -> Bool
+check pa pb = flip evalState 0 $ do
+  ma <- inst pa
+  mb <- inst pb
+  pure $ isJust $ mgu ma mb
+
+-- | Quantifies a 'MonoType' over a set of 'VarType's.
+quantifySome :: [VarType] -> MonoType -> PolyType
+quantifySome vt mt = foldr ForAll (Mono mt) bound
+  where
+  bound = MGU.vars mt `intersect` vt
+
+-- | Quantifies a 'MonoType' over all of its 'VarType's.
+quantify :: MonoType -> PolyType
+quantify t = quantifySome (MGU.vars t) t
