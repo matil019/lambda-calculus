@@ -119,12 +119,6 @@ instance TypeSet a => Genetic (ClosedTerm a) where
     . genModifiedTerm (candidateConsts (Proxy :: Proxy a)) 0
     . unClosedTerm
 
--- | A well-typed 'Term'. (i.e. a Term which has been typechecked)
---
--- When you see a function taking 'WTerm' as an argument, it assumes that
--- the term is well-typed.
-type WTerm = Term
-
 -- | The list must be infinite. TODO add a newtype
 --
 -- This function does *not* consider types, because substitution is an
@@ -139,12 +133,12 @@ substitute s (Abs t m) = Abs t (substitute (Var 1 : map (\i -> substitute s' (Va
   shift = substitute (map Var [2..])
 
 -- | Beta reduction.
-reduceBeta :: WTerm -> WTerm
+reduceBeta :: Term -> Term
 reduceBeta (App (Abs _ m) n) = substitute (n:map Var [1..]) m
 reduceBeta m = m
 
 -- TODO take advantage of the strongly normalizing property and optimize
-reduceStep :: WTerm -> Maybe WTerm
+reduceStep :: Term -> Maybe Term
 reduceStep (Const _ _) = Nothing
 reduceStep (Var _) = Nothing
 reduceStep (Abs t m) = Abs t <$> reduceStep m
@@ -157,7 +151,7 @@ reduceSteps :: Monad m => Term -> ConduitT i Term m ()
 reduceSteps = C.unfold (fmap dupe . reduceStep)
 
 -- | Interprets a lambda term as a Church numeral. The term must be fully reduced.
-interpretChurchNumber :: WTerm -> Maybe Natural
+interpretChurchNumber :: Term -> Maybe Natural
 interpretChurchNumber = \m ->
   go $ reduceBeta $ App (reduceBeta (App m (Var 2))) (Var 1)
   where
@@ -165,7 +159,7 @@ interpretChurchNumber = \m ->
   go (App (Var 2) n) = fmap (1+) $ go n
   go _ = Nothing
 
-encodeChurchNumber :: Type -> Natural -> WTerm
+encodeChurchNumber :: Type -> Natural -> Term
 encodeChurchNumber t n =
   Abs (Just (t :-> t)) $ Abs (Just t) $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
 
@@ -185,7 +179,7 @@ encodeChurchNumber t n =
 -- TODO add type variables and/or type inference to lift this restriction
 --
 -- TODO add a newtype which indicates a term is known to be well-typed and has that type
-interpretChurchPair :: WTerm -> Maybe (Term, Term)
+interpretChurchPair :: Term -> Maybe (Term, Term)
 interpretChurchPair m = case typeOf [] m of
   Just ((a :-> b :-> _) :-> _) ->
     let first  = Abs (Just ((a :-> b :-> a) :-> a)) $ App (Var 1) (Abs (Just a) $ Abs (Just b) $ Var 2)
