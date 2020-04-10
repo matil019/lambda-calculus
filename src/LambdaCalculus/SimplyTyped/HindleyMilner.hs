@@ -1,9 +1,13 @@
+-- | Infers the principal type of a 'Term' with Hindley-Milner type inference.
+--
+-- The main interface is 'infer' and 'check'.
 module LambdaCalculus.SimplyTyped.HindleyMilner where
 
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(MaybeT), runMaybeT)
 import Control.Monad.Trans.State.Strict (State, evalState)
 import Data.List (foldl')
+import Data.Maybe (isJust)
 import LambdaCalculus.SimplyTyped.HindleyMilner.MGU (mgu)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Term -- TODO no all-in import
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
@@ -84,3 +88,7 @@ infer = fmap fst . flip evalState 0 . runMaybeT . infer' freeVarTypes
   -- if it were @[]@, @infer (Var 1)@ would be @Nothing@, but thanks to this,
   -- @infer (Var 1)@ is @Just (VarType "a0")@ as expected.
   freeVarTypes = repeat $ ForAll "a" (Mono (VarType "a"))
+
+-- | Checks if two types are compatible (aka unify).
+check :: MonoType -> MonoType -> Bool
+check t u = isJust $ mgu t u
