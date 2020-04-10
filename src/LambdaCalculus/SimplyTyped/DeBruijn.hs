@@ -15,7 +15,6 @@ import Data.Proxy (Proxy(Proxy))
 import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
 import LambdaCalculus.Genetic (Genetic, genCrossover)
-import LambdaCalculus.SimplyTyped.DeBruijn.Deprecated
 import Numeric.Natural (Natural)
 import Test.QuickCheck (Arbitrary, Gen)
 

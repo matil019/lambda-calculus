@@ -23,7 +23,6 @@ library
                        LambdaCalculus.InfList
                        LambdaCalculus.Main
                        LambdaCalculus.SimplyTyped.DeBruijn
-                       LambdaCalculus.SimplyTyped.DeBruijn.Deprecated
                        LambdaCalculus.SimplyTyped.HindleyMilner
                        LambdaCalculus.SimplyTyped.HindleyMilner.MGU
                        LambdaCalculus.SimplyTyped.HindleyMilner.Term
