@@ -15,13 +15,20 @@ import Data.Proxy (Proxy(Proxy))
 import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
 import LambdaCalculus.Genetic (Genetic, genCrossover)
+import LambdaCalculus.SimplyTyped.HindleyMilner.Term
+  ( BoundTerm(BoundTerm)
+  , Term(Abs, App, Const, Var)
+  , boundNum
+  , boundTerm
+  , countTerm
+  , ixBound
+  )
+import LambdaCalculus.SimplyTyped.HindleyMilner.Types (MonoType)
 import Numeric.Natural (Natural)
 import Test.QuickCheck (Arbitrary, Gen)
 
 import qualified Data.Conduit.Combinators as C
 import qualified LambdaCalculus.Genetic
-import qualified LambdaCalculus.SimplyTyped.HindleyMilner.Term as HM -- TODO make unqualified
-import qualified LambdaCalculus.SimplyTyped.HindleyMilner.Types as HM -- TODO make unqualified
 import qualified Test.QuickCheck as Q
 
 -- TODO lots of functions were copy-pasted from untyped DeBruijn.
@@ -36,7 +43,7 @@ import qualified Test.QuickCheck as Q
 -- TODO Allow @App@ (consider the size)
 -- TODO Allow @Const@
 -- TODO add another implementation which always yields a well-typed Terms
-genTerm :: [(HM.MonoType, String)] -> Int -> Gen HM.Term
+genTerm :: [(MonoType, String)] -> Int -> Gen Term
 genTerm constants freeNum = do
   -- see LambdaCalculus.Term.genTerm for explanation of the probability
   size <- max 1 <$> Q.getSize
@@ -52,67 +59,67 @@ genTerm constants freeNum = do
           Q.frequency [(p, genConst), (p, genVar), (q, genAbs), (q, genApp)]
   where
   -- 1 term
-  genConst = uncurry HM.Const <$> Q.elements constants
+  genConst = uncurry Const <$> Q.elements constants
   -- 1 term
-  genVar = HM.Var <$> Q.choose (1, freeNum)
+  genVar = Var <$> Q.choose (1, freeNum)
   -- X + 1 terms
-  genAbs = HM.Abs <$> genTerm constants (freeNum+1)
+  genAbs = Abs <$> genTerm constants (freeNum+1)
   -- 2X + 1 terms
-  genApp = HM.App <$> genTerm constants freeNum <*> genTerm constants freeNum
+  genApp = App <$> genTerm constants freeNum <*> genTerm constants freeNum
 
 -- | Generates a modified 'Term'.
 --
 -- Picks a random sub-term and replaces it with a fresh one.
-genModifiedTerm :: [(HM.MonoType, String)] -> Int -> HM.Term -> Gen HM.Term
+genModifiedTerm :: [(MonoType, String)] -> Int -> Term -> Gen Term
 genModifiedTerm constants freeNum m = do
-  i <- Q.choose (0, HM.countTerm m - 1)
-  flip (HM.ixBound i) m $ \HM.BoundTerm{HM.boundNum} -> genTerm constants $ boundNum + freeNum
+  i <- Q.choose (0, countTerm m - 1)
+  flip (ixBound i) m $ \BoundTerm{boundNum} -> genTerm constants $ boundNum + freeNum
 
 -- | Generates a closed 'Term'.
-genClosedTerm :: [(HM.MonoType, String)] -> Gen HM.Term
+genClosedTerm :: [(MonoType, String)] -> Gen Term
 genClosedTerm constants = genTerm constants 0
 
 -- | A class for phantom types to control instances of 'Arbitrary'.
 class TypeSet a where
-  candidateConsts :: proxy a -> [(HM.MonoType, String)]
+  candidateConsts :: proxy a -> [(MonoType, String)]
 
 -- | A closed lambda term. This assumption allows more type instances to be defined.
 --
 -- The phantom type controls instances of 'Arbitrary'. See 'TypeSet'.
-newtype ClosedTerm a = ClosedTerm { unClosedTerm :: HM.Term }
+newtype ClosedTerm a = ClosedTerm { unClosedTerm :: Term }
   deriving (Eq, Generic, NFData, Show)
 
 instance TypeSet a => Arbitrary (ClosedTerm a) where
   arbitrary = ClosedTerm <$> genClosedTerm (candidateConsts (Proxy :: Proxy a))
 
 instance Ixed (ClosedTerm a) where
-  ix :: Int -> Traversal' (ClosedTerm a) HM.Term
+  ix :: Int -> Traversal' (ClosedTerm a) Term
   ix i f = fmap ClosedTerm . ix i f . unClosedTerm
 
 type instance Index (ClosedTerm a) = Int
-type instance IxValue (ClosedTerm a) = HM.Term
+type instance IxValue (ClosedTerm a) = Term
 
 instance TypeSet a => Genetic (ClosedTerm a) where
   -- TODO always generate well-typed terms?
   genCrossover p12@(ClosedTerm parent1, ClosedTerm parent2) = do
-    i1 <- Q.choose (0, HM.countTerm parent1 - 1)
-    i2 <- Q.choose (0, HM.countTerm parent2 - 1)
+    i1 <- Q.choose (0, countTerm parent1 - 1)
+    i2 <- Q.choose (0, countTerm parent2 - 1)
     let sub1 = preview (ixBound' i1) parent1
         sub2 = preview (ixBound' i2) parent2
-        child1 = maybe id (set (ix i1) . HM.boundTerm) sub2 $ parent1
-        child2 = maybe id (set (ix i2) . HM.boundTerm) sub1 $ parent2
+        child1 = maybe id (set (ix i1) . boundTerm) sub2 $ parent1
+        child2 = maybe id (set (ix i2) . boundTerm) sub1 $ parent2
     -- retry if not swappable TODO implement without retrying
     if fromMaybe False $ swappable <$> sub1 <*> sub2
       then pure (ClosedTerm child1, ClosedTerm child2)
       else genCrossover p12
     where
-    ixBound' :: Int -> Traversal' HM.Term HM.BoundTerm
-    ixBound' i f = HM.ixBound i (fmap HM.boundTerm . f)
+    ixBound' :: Int -> Traversal' Term BoundTerm
+    ixBound' i f = ixBound i (fmap boundTerm . f)
     -- for terms to be closed after swapping, the number of free variables in
     -- swapped sub-terms must not increase.
     -- the certain set of inequal equations reduces to this simple one.
-    swappable :: HM.BoundTerm -> HM.BoundTerm -> Bool
-    swappable m n = HM.boundNum m == HM.boundNum n
+    swappable :: BoundTerm -> BoundTerm -> Bool
+    swappable m n = boundNum m == boundNum n
 
   genMutant = fmap ClosedTerm
     . genModifiedTerm (candidateConsts (Proxy :: Proxy a)) 0
@@ -122,51 +129,51 @@ instance TypeSet a => Genetic (ClosedTerm a) where
 --
 -- This function does *not* consider types, because substitution is
 -- independent of typing.
-substitute :: [HM.Term] -> HM.Term -> HM.Term
-substitute _ m@(HM.Const _ _) = m
-substitute s (HM.Var x) = s !! (x-1)
-substitute s (HM.App m n) = HM.App (substitute s m) (substitute s n)
-substitute s (HM.Abs m) = HM.Abs (substitute (HM.Var 1 : map (\i -> substitute s' (HM.Var i)) [1..]) m)
+substitute :: [Term] -> Term -> Term
+substitute _ m@(Const _ _) = m
+substitute s (Var x) = s !! (x-1)
+substitute s (App m n) = App (substitute s m) (substitute s n)
+substitute s (Abs m) = Abs (substitute (Var 1 : map (\i -> substitute s' (Var i)) [1..]) m)
   where
   s' = map shift s
-  shift = substitute (map HM.Var [2..])
+  shift = substitute (map Var [2..])
 
 -- | Beta reduction.
-reduceBeta :: HM.Term -> HM.Term
-reduceBeta (HM.App (HM.Abs m) n) = substitute (n:map HM.Var [1..]) m
+reduceBeta :: Term -> Term
+reduceBeta (App (Abs m) n) = substitute (n:map Var [1..]) m
 reduceBeta m = m
 
 -- TODO take advantage of the strongly normalizing property and optimize
-reduceStep :: HM.Term -> Maybe HM.Term
-reduceStep (HM.Const _ _) = Nothing
-reduceStep (HM.Var _) = Nothing
-reduceStep (HM.Abs m) = HM.Abs <$> reduceStep m
-reduceStep m@(HM.App (HM.Abs _) _) = Just $ reduceBeta m
-reduceStep (HM.App m n) = case reduceStep m of
-  Just m' -> Just $ HM.App m' n
-  Nothing -> HM.App m <$> reduceStep n
+reduceStep :: Term -> Maybe Term
+reduceStep (Const _ _) = Nothing
+reduceStep (Var _) = Nothing
+reduceStep (Abs m) = Abs <$> reduceStep m
+reduceStep m@(App (Abs _) _) = Just $ reduceBeta m
+reduceStep (App m n) = case reduceStep m of
+  Just m' -> Just $ App m' n
+  Nothing -> App m <$> reduceStep n
 
-reduceSteps :: Monad m => HM.Term -> ConduitT i HM.Term m ()
+reduceSteps :: Monad m => Term -> ConduitT i Term m ()
 reduceSteps = C.unfold (fmap dupe . reduceStep)
 
 -- | Interprets a lambda term as a Church numeral. The term must be fully reduced.
-interpretChurchNumber :: HM.Term -> Maybe Natural
+interpretChurchNumber :: Term -> Maybe Natural
 interpretChurchNumber = \m ->
-  go $ reduceBeta $ HM.App (reduceBeta (HM.App m (HM.Var 2))) (HM.Var 1)
+  go $ reduceBeta $ App (reduceBeta (App m (Var 2))) (Var 1)
   where
-  go (HM.Var 1) = Just 0
-  go (HM.App (HM.Var 2) n) = fmap (1+) $ go n
+  go (Var 1) = Just 0
+  go (App (Var 2) n) = fmap (1+) $ go n
   go _ = Nothing
 
-encodeChurchNumber :: Natural -> HM.Term
+encodeChurchNumber :: Natural -> Term
 encodeChurchNumber n =
-  HM.Abs $ HM.Abs $ iterate (HM.App (HM.Var 2)) (HM.Var 1) !! fromIntegral n
+  Abs $ Abs $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
 
 -- | Interprets a lambda term as a Church pair.
 --
 -- The argument can be a redex. Always returns redexes.
-interpretChurchPair :: HM.Term -> (HM.Term, HM.Term)
+interpretChurchPair :: Term -> (Term, Term)
 interpretChurchPair m =
-  ( HM.App m (HM.Abs (HM.Abs (HM.Var 2)))
-  , HM.App m (HM.Abs (HM.Abs (HM.Var 1)))
+  ( App m (Abs (Abs (Var 2)))
+  , App m (Abs (Abs (Var 1)))
   )
