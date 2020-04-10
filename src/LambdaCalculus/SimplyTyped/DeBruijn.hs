@@ -121,42 +121,42 @@ instance TypeSet a => Genetic (ClosedTerm a) where
 
 -- | The list must be infinite. TODO add a newtype
 --
--- This function does *not* consider types, because substitution is an
+-- This function does *not* consider types, because substitution is
 -- independent of typing.
-substitute :: [Term] -> Term -> Term
-substitute _ m@(Const _ _) = m
-substitute s (Var x) = s !! (x-1)
-substitute s (App m n) = App (substitute s m) (substitute s n)
-substitute s (Abs t m) = Abs t (substitute (Var 1 : map (\i -> substitute s' (Var i)) [1..]) m)
+substitute :: [HM.Term] -> HM.Term -> HM.Term
+substitute _ m@(HM.Const _ _) = m
+substitute s (HM.Var x) = s !! (x-1)
+substitute s (HM.App m n) = HM.App (substitute s m) (substitute s n)
+substitute s (HM.Abs m) = HM.Abs (substitute (HM.Var 1 : map (\i -> substitute s' (HM.Var i)) [1..]) m)
   where
   s' = map shift s
-  shift = substitute (map Var [2..])
+  shift = substitute (map HM.Var [2..])
 
 -- | Beta reduction.
-reduceBeta :: Term -> Term
-reduceBeta (App (Abs _ m) n) = substitute (n:map Var [1..]) m
+reduceBeta :: HM.Term -> HM.Term
+reduceBeta (HM.App (HM.Abs m) n) = substitute (n:map HM.Var [1..]) m
 reduceBeta m = m
 
 -- TODO take advantage of the strongly normalizing property and optimize
-reduceStep :: Term -> Maybe Term
-reduceStep (Const _ _) = Nothing
-reduceStep (Var _) = Nothing
-reduceStep (Abs t m) = Abs t <$> reduceStep m
-reduceStep m@(App (Abs _ _) _) = Just $ reduceBeta m
-reduceStep (App m n) = case reduceStep m of
-  Just m' -> Just $ App m' n
-  Nothing -> App m <$> reduceStep n
+reduceStep :: HM.Term -> Maybe HM.Term
+reduceStep (HM.Const _ _) = Nothing
+reduceStep (HM.Var _) = Nothing
+reduceStep (HM.Abs m) = HM.Abs <$> reduceStep m
+reduceStep m@(HM.App (HM.Abs _) _) = Just $ reduceBeta m
+reduceStep (HM.App m n) = case reduceStep m of
+  Just m' -> Just $ HM.App m' n
+  Nothing -> HM.App m <$> reduceStep n
 
-reduceSteps :: Monad m => Term -> ConduitT i Term m ()
+reduceSteps :: Monad m => HM.Term -> ConduitT i HM.Term m ()
 reduceSteps = C.unfold (fmap dupe . reduceStep)
 
 -- | Interprets a lambda term as a Church numeral. The term must be fully reduced.
-interpretChurchNumber :: Term -> Maybe Natural
+interpretChurchNumber :: HM.Term -> Maybe Natural
 interpretChurchNumber = \m ->
-  go $ reduceBeta $ App (reduceBeta (App m (Var 2))) (Var 1)
+  go $ reduceBeta $ HM.App (reduceBeta (HM.App m (HM.Var 2))) (HM.Var 1)
   where
-  go (Var 1) = Just 0
-  go (App (Var 2) n) = fmap (1+) $ go n
+  go (HM.Var 1) = Just 0
+  go (HM.App (HM.Var 2) n) = fmap (1+) $ go n
   go _ = Nothing
 
 encodeChurchNumber :: Type -> Natural -> Term
