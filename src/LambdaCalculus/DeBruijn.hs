@@ -129,8 +129,6 @@ countTerm (Abs m) = 1 + countTerm m
 countTerm (App m n) = 1 + countTerm m + countTerm n
 
 -- | Is this 'Term' closed (i.e. has no free variables)?
---
--- TODO consider implementing this with the lenses (bench)
 isClosed :: Term -> Bool
 isClosed = go 0
   where
