@@ -69,13 +69,16 @@ ixBound = loop 0
           cn1 = countTerm n1
 
 -- | Formats a 'Term' into a human-readable string.
---
--- TODO remove redundant parens
 formatTerm :: Term -> String
 formatTerm (Var x) = show x
 formatTerm (Const _ a) = a
-formatTerm (Abs m) = "(\\ " <> formatTerm m <> ")"
-formatTerm (App m n) = "(" <> formatTerm m <> " " <> formatTerm n <> ")"
+formatTerm (Abs m) = "\\ " <> formatTerm m
+formatTerm (App m n)
+   = (case m of Abs _ -> paren; _ -> id;) (formatTerm m)
+  <> " "
+  <> (case n of Abs _ -> paren; App _ _ -> paren; _ -> id) (formatTerm n)
+  where
+  paren s = "(" <> s <> ")"
 
 -- | Counts a number of sub-terms in a 'Term'.
 countTerm :: Term -> Int
