@@ -144,7 +144,9 @@ reduceBeta :: Term -> Term
 reduceBeta (App (Abs m) n) = substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
 reduceBeta m = m
 
--- TODO take advantage of the strongly normalizing property and optimize
+-- | @reduceStep m@ tries to reduce a beta-redex one step.
+--
+-- If @m@ can't be reduced any more, returns @Nothing@.
 reduceStep :: Term -> Maybe Term
 reduceStep (Const _ _) = Nothing
 reduceStep (Var _) = Nothing
@@ -154,10 +156,11 @@ reduceStep (App m n) = case reduceStep m of
   Just m' -> Just $ App m' n
   Nothing -> App m <$> reduceStep n
 
+-- | Repeatedly reduces ('reduceStep') a term and yields each step.
 reduceSteps :: Monad m => Term -> ConduitT i Term m ()
 reduceSteps = C.unfold (fmap dupe . reduceStep)
 
--- | Interprets a lambda term as a Church numeral. The term must be fully reduced.
+-- | Interprets a lambda term as a Church numeral. The term must be fully reduced. (TODO add a newtype)
 interpretChurchNumber :: Term -> Maybe Natural
 interpretChurchNumber = \m ->
   go $ reduceBeta $ App (reduceBeta (App m (Var 2))) (Var 1)
@@ -166,9 +169,9 @@ interpretChurchNumber = \m ->
   go (App (Var 2) n) = fmap (1+) $ go n
   go _ = Nothing
 
+-- | Encodes a natural number into a Church numeral.
 encodeChurchNumber :: Natural -> Term
-encodeChurchNumber n =
-  Abs $ Abs $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
+encodeChurchNumber n = Abs $ Abs $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
 
 -- | Interprets a lambda term as a Church pair.
 --
