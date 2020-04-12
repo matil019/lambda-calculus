@@ -29,9 +29,11 @@ import Data.List (intercalate, sortOn)
 import Data.List.Extra (maximumOn)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Ord (Down(Down))
-import LambdaCalculus.DeBruijn
+import LambdaCalculus.SimplyTyped.DeBruijn
   ( ClosedTerm
   , Term(App)
+  , TypeSet
+  , candidateConsts
   , countTerm
   , encodeChurchNumber
   , formatTerm
@@ -132,10 +134,15 @@ resultScore (Result xs) = sum $ flip map xs
     | otherwise = 1
   justEq _ Nothing = 0
 
+data LikeUntyped
+
+instance TypeSet LikeUntyped where
+  candidateConsts _ = []
+
 -- | An event in a progress of running Genetic Algorithm.
 data Event
   = RunEvent (Term, Result, Double, Seconds)
-  | GenEvent [(ClosedTerm, Double)]
+  | GenEvent [(ClosedTerm LikeUntyped, Double)]
 
 -- | The main function.
 main :: IO ()
@@ -226,7 +233,7 @@ main = do
 
     numPopulation = 1000
 
-    runMeasureYield :: MonadIO m => ClosedTerm -> ConduitT i Event m Double
+    runMeasureYield :: MonadIO m => ClosedTerm a -> ConduitT i Event m Double
     runMeasureYield m = do
       (time, (result, score)) <- liftIO $ duration $ do
         let !result = runTerm $ unClosedTerm m
