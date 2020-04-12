@@ -15,6 +15,7 @@ import Data.Proxy (Proxy(Proxy))
 import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
 import LambdaCalculus.Genetic (Genetic, genCrossover)
+import LambdaCalculus.InfList (InfList)
 import LambdaCalculus.SimplyTyped.HindleyMilner as ReExport (check, infer, quantify)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Term as ReExport
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types as ReExport
@@ -26,6 +27,7 @@ import Test.QuickCheck (Arbitrary, Gen)
 
 import qualified Data.Conduit.Combinators as C
 import qualified LambdaCalculus.Genetic
+import qualified LambdaCalculus.InfList as InfList
 import qualified Test.QuickCheck as Q
 
 -- TODO lots of functions were copy-pasted from untyped DeBruijn.
@@ -122,22 +124,24 @@ instance TypeSet a => Genetic (ClosedTerm a) where
     . genModifiedTerm (candidateConsts (Proxy :: Proxy a)) 0
     . unClosedTerm
 
--- | The list must be infinite. TODO add a newtype
+-- | Performs a substitution.
+--
+-- You would like to use 'reduceBeta' instead of using this directly.
 --
 -- This function does *not* consider types, because substitution is
 -- independent of typing.
-substitute :: [Term] -> Term -> Term
+substitute :: InfList Term -> Term -> Term
 substitute _ m@(Const _ _) = m
-substitute s (Var x) = s !! (x-1)
+substitute s (Var x) = InfList.toList s !! (x-1)
 substitute s (App m n) = App (substitute s m) (substitute s n)
-substitute s (Abs m) = Abs (substitute (Var 1 : map (\i -> substitute s' (Var i)) [1..]) m)
+substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> substitute s' (Var i)) $ InfList.enumFrom 1) m)
   where
-  s' = map shift s
-  shift = substitute (map Var [2..])
+  s' = fmap shift s
+  shift = substitute (fmap Var $ InfList.enumFrom 2)
 
--- | Beta reduction.
+-- | Performs a beta-reduction.
 reduceBeta :: Term -> Term
-reduceBeta (App (Abs m) n) = substitute (n:map Var [1..]) m
+reduceBeta (App (Abs m) n) = substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
 reduceBeta m = m
 
 -- TODO take advantage of the strongly normalizing property and optimize
