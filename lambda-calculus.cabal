@@ -62,6 +62,9 @@ test-suite unittest
   type:                exitcode-stdio-1.0
   main-is:             Main.hs
   other-modules:       LambdaCalculus.DeBruijnSpec
+                       LambdaCalculus.SimplyTyped.HindleyMilner.Instances
+                       LambdaCalculus.SimplyTyped.HindleyMilner.Types.Instances
+                       LambdaCalculus.SimplyTyped.HindleyMilnerSpec
                        LambdaCalculus.TermSpec
   build-depends:       lambda-calculus, base
                      , QuickCheck

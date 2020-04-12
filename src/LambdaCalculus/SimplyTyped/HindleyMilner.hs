@@ -54,7 +54,6 @@ substPolyType x m = go []
 -- subst (a <> b) ≡ subst a . subst b
 -- subst mempty ≡ id
 -- @
--- TODO test this
 newtype Subst = Subst [(VarType, MonoType)]
   deriving (Eq, Show)
   deriving newtype (Monoid, NFData)
