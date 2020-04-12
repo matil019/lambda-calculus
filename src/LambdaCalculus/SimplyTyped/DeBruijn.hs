@@ -5,7 +5,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-module LambdaCalculus.SimplyTyped.DeBruijn where
+module LambdaCalculus.SimplyTyped.DeBruijn (module LambdaCalculus.SimplyTyped.DeBruijn, module ReExport) where
 
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal', ix, preview, set)
@@ -15,15 +15,12 @@ import Data.Proxy (Proxy(Proxy))
 import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
 import LambdaCalculus.Genetic (Genetic, genCrossover)
-import LambdaCalculus.SimplyTyped.HindleyMilner.Term
-  ( BoundTerm(BoundTerm)
-  , Term(Abs, App, Const, Var)
-  , boundNum
-  , boundTerm
-  , countTerm
-  , ixBound
+import LambdaCalculus.SimplyTyped.HindleyMilner as ReExport (check, infer, quantify)
+import LambdaCalculus.SimplyTyped.HindleyMilner.Term as ReExport
+import LambdaCalculus.SimplyTyped.HindleyMilner.Types as ReExport
+  ( MonoType((:->), VarType)
+  , PolyType(ForAll, Mono)
   )
-import LambdaCalculus.SimplyTyped.HindleyMilner.Types (MonoType)
 import Numeric.Natural (Natural)
 import Test.QuickCheck (Arbitrary, Gen)
 
