@@ -1,8 +1,11 @@
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- | Infers the principal type of a 'Term' with Hindley-Milner type inference.
 --
 -- The main interface is 'infer' and 'check'.
 module LambdaCalculus.SimplyTyped.HindleyMilner where
 
+import Control.DeepSeq (NFData)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(MaybeT), runMaybeT)
 import Control.Monad.Trans.State.Strict (State, evalState)
@@ -35,6 +38,18 @@ substPolyType x m = go []
   go bound t | x `elem` bound = t
   go _ (Mono t) = Mono $ substMonoType x m t
   go bound (ForAll a t) = ForAll a $ go (a:bound) t
+
+newtype Subst = Subst [(VarType, MonoType)]
+  deriving (Eq, Show)
+  deriving newtype (Monoid, NFData)
+
+-- | @a <> b@ merges substitutions in the same way as function composition
+--
+-- In other words, @subst (a <> b) == subst a . subst b@  TODO test this
+--
+-- For efficiency, the wrapped lists are concatenated in the /reverse order/
+instance Semigroup Subst where
+  Subst a <> Subst b = Subst (b <> a)
 
 substCtx :: Subst -> [PolyType] -> [PolyType]
 substCtx (Subst ss) = map $ \t0 -> foldl' (flip $ uncurry substPolyType) t0 ss

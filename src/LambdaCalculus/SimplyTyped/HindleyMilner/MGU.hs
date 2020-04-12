@@ -8,10 +8,10 @@ import Data.Tuple.Extra (both, second)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
 
 -- | The most general unifier.
-mgu :: MonoType -> MonoType -> Maybe Subst
+mgu :: MonoType -> MonoType -> Maybe [(VarType, MonoType)]
 mgu = \t t' -> go $ S [(t, t')] []
   where
-  go (S [] acc) = pure $ Subst acc
+  go (S [] acc) = pure acc
   go (S (gh:gt) acc) = case gh of
     (t, t') | t == t' -> go $ S gt acc
     (VarType x, t')
