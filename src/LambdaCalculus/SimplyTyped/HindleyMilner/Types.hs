@@ -1,19 +1,23 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+-- | Types which represent types in Hindley-Milner type system.
 module LambdaCalculus.SimplyTyped.HindleyMilner.Types where
 
 import Control.DeepSeq (NFData)
 import GHC.Generics (Generic)
 
+-- | A type variable representation.
 type VarType = String
 
+-- | A mono type.
 data MonoType
-  = VarType VarType
-  | ConstType String
-  | MonoType :-> MonoType
+  = VarType VarType        -- ^ A type variable
+  | ConstType String       -- ^ A constant type
+  | MonoType :-> MonoType  -- ^ A function type
   deriving (Eq, Generic, NFData, Show)
 infixr 1 :->
 
+-- | Formats a 'MonoType' into a human-readable string.
 formatMonoType :: MonoType -> String
 formatMonoType (VarType x) = x
 formatMonoType (ConstType c) = c
@@ -25,7 +29,8 @@ formatMonoType (t :-> u) =
     ConstType _ -> id
     _ :-> _     -> \s -> "(" <> s <> ")"
 
+-- | A poly type.
 data PolyType
-  = Mono MonoType
-  | ForAll VarType PolyType
+  = Mono MonoType            -- ^ A mono type with no bound type variables.
+  | ForAll VarType PolyType  -- ^ A variable binder and a type.
   deriving (Eq, Generic, NFData, Show)

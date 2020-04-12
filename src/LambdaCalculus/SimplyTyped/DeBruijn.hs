@@ -5,7 +5,28 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-module LambdaCalculus.SimplyTyped.DeBruijn (module LambdaCalculus.SimplyTyped.DeBruijn, module ReExport) where
+-- | Simply-typed terms in De Bruijn index notation and some high-level stuff.
+module LambdaCalculus.SimplyTyped.DeBruijn
+  ( -- * Types
+    VarType, MonoType(..), formatMonoType, PolyType(..)
+  , -- * Terms
+    Term(..)
+  , -- ** Basic operations
+    formatTerm, countTerm, isClosed
+  , -- ** Accessors and lists
+    linear, toList, index, ixBound, BoundTerm(..)
+  , -- ** Type inference
+    infer, check, quantify
+  , -- ** Closed terms
+    ClosedTerm(..), TypeSet(..)
+  , -- ** Generating terms
+    genTerm, genModifiedTerm, genClosedTerm
+  , -- ** Reductions
+    -- | These functions do /not/ consider types, because substitution is independent of typing.
+    substitute, reduceBeta, reduceStep, reduceSteps
+  , -- ** Church encodings
+    encodeChurchNumber, interpretChurchNumber, interpretChurchPair
+  ) where
 
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal', ix, preview, set)
@@ -16,11 +37,13 @@ import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
 import LambdaCalculus.Genetic (Genetic, genCrossover)
 import LambdaCalculus.InfList (InfList)
-import LambdaCalculus.SimplyTyped.HindleyMilner as ReExport (check, infer, quantify)
-import LambdaCalculus.SimplyTyped.HindleyMilner.Term as ReExport
-import LambdaCalculus.SimplyTyped.HindleyMilner.Types as ReExport
-  ( MonoType((:->), VarType)
+import LambdaCalculus.SimplyTyped.HindleyMilner (check, infer, quantify)
+import LambdaCalculus.SimplyTyped.HindleyMilner.Term
+import LambdaCalculus.SimplyTyped.HindleyMilner.Types
+  ( MonoType((:->), ConstType, VarType)
   , PolyType(ForAll, Mono)
+  , VarType
+  , formatMonoType
   )
 import Numeric.Natural (Natural)
 import Test.QuickCheck (Arbitrary, Gen)
@@ -124,9 +147,6 @@ instance TypeSet a => Genetic (ClosedTerm a) where
 -- | Performs a substitution.
 --
 -- You would like to use 'reduceBeta' instead of using this directly.
---
--- This function does *not* consider types, because substitution is
--- independent of typing.
 substitute :: InfList Term -> Term -> Term
 substitute _ m@(Const _ _) = m
 substitute s (Var x) = InfList.toList s !! (x-1)

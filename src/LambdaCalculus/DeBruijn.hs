@@ -13,7 +13,8 @@
 -- | Lambda terms in De Bruijn index notation.
 module LambdaCalculus.DeBruijn
   ( Term
-    ( LambdaCalculus.DeBruijn.Var
+    ( ..
+    , LambdaCalculus.DeBruijn.Var
     , LambdaCalculus.DeBruijn.Abs
     , LambdaCalculus.DeBruijn.App
     )
@@ -56,7 +57,7 @@ newtype Term = Untyped { getTyped :: Typed.Term }
 -- This is consistent with 'index':
 --
 -- @
--- 'preview' ('ix' i) == 'Just' ('index' i)
+-- 'preview' ('ix' i) ≡ 'index' i
 -- @
 --
 -- See also 'ixBound'.
@@ -209,7 +210,7 @@ genModifiedTerm = coerce $ Typed.genModifiedTerm []
 -- | A null data type for use with 'Typed.TypeSet'
 data NoConstants
 
--- | @'candidateConsts _' = []@ because untyped terms are equivalent with typed terms
+-- | @'Typed.candidateConsts' _ = []@ because untyped terms are equivalent with typed terms
 -- in which constants never appear.
 instance Typed.TypeSet NoConstants where
   candidateConsts _ = []

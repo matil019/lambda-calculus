@@ -5,6 +5,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+-- | Simply-typed lambda terms in De Bruijn index notation.
 module LambdaCalculus.SimplyTyped.HindleyMilner.Term where
 
 import Control.DeepSeq (NFData)
@@ -16,6 +17,9 @@ import LambdaCalculus.SimplyTyped.HindleyMilner.Types (MonoType)
 import qualified Data.List.NonEmpty as NE
 
 -- | A lambda term with typed constants in De Bruijn index notation.
+--
+-- Type annotations in abstractions are omitted so that they are inferred by
+-- Hindley-Milner.
 data Term
   = Var Int                -- ^ A variable (must start at @1@)
   | Abs Term               -- ^ An abstraction
@@ -28,7 +32,7 @@ data Term
 -- This is consistent with 'index':
 --
 -- @
--- 'preview' ('ix' i) == 'Just' ('index' i)
+-- 'preview' ('ix' i) ≡ 'index' i
 -- @
 --
 -- See also 'ixBound'.

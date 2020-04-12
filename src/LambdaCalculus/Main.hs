@@ -134,6 +134,7 @@ resultScore (Result xs) = sum $ flip map xs
     | otherwise = 1
   justEq _ Nothing = 0
 
+-- | A null data type for use with 'TypeSet'
 data LikeUntyped
 
 instance TypeSet LikeUntyped where

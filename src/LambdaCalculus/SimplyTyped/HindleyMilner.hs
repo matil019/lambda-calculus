@@ -25,13 +25,14 @@ import qualified LambdaCalculus.SimplyTyped.HindleyMilner.MGU as MGU
 -- where @a@ is some monotype decided by "the user".
 -- this is the Rank-1 type.
 
--- | A counter to generate fresh variables
+-- | A counter to generate fresh distinct variables
 type Counter = Int
 
+-- | @substMonoType x m t@ substitutes all occurences of @x@ in @t@ by @m@.
 substMonoType :: VarType -> MonoType -> MonoType -> MonoType
 substMonoType = MGU.subst
 
--- | TODO reuse ordinary @substitute@ functions for Terms?
+-- | @substPolyType x m s@ substitutes all occurences of @x@ in @s@ by @m@ excluding bound variables.
 substPolyType :: VarType -> MonoType -> PolyType -> PolyType
 substPolyType x m = go []
   where
@@ -39,18 +40,30 @@ substPolyType x m = go []
   go _ (Mono t) = Mono $ substMonoType x m t
   go bound (ForAll a t) = ForAll a $ go (a:bound) t
 
+-- | A list of substitutions of a type variable with a mono type.
+--
+-- Substitutions are applied from the first element of the list to the last.
+--
+-- Together with 'subst', the 'Monoid' instance obeys the following law:
+--
+-- @
+-- subst (a <> b) ≡ subst a . subst b
+-- subst mempty ≡ id
+-- @
+-- TODO test this
 newtype Subst = Subst [(VarType, MonoType)]
   deriving (Eq, Show)
   deriving newtype (Monoid, NFData)
 
--- | @a <> b@ merges substitutions in the same way as function composition
+-- | @a <> b@ merges substitutions in the same way as function composition.
 --
--- In other words, @subst (a <> b) == subst a . subst b@  TODO test this
+-- In other words, @'subst' (a <> b) == 'subst' a . 'subst' b@.
 --
--- For efficiency, the wrapped lists are concatenated in the /reverse order/
+-- This means the wrapped lists are concatenated in the /reverse order/.
 instance Semigroup Subst where
   Subst a <> Subst b = Subst (b <> a)
 
+-- | Applies 'substPolyType' to each 'PolyType'.
 substCtx :: Subst -> [PolyType] -> [PolyType]
 substCtx (Subst ss) = map $ \t0 -> foldl' (flip $ uncurry substPolyType) t0 ss
 
@@ -71,12 +84,13 @@ newvar = State.state $ \counter -> (VarType $ "a" <> show counter, counter + 1)
 subst :: Subst -> MonoType -> MonoType
 subst (Subst ss) t0 = foldl' (flip $ uncurry substMonoType) t0 ss
 
+-- | Lifts a 'Maybe' to a 'MaybeT'.
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe = MaybeT . pure
 
 -- | The implementation of 'infer'.
 --
--- Implemented by the Algorithm W.
+-- Implemented using the Algorithm W.
 infer' :: [PolyType] -> Term -> MaybeT (State Counter) (MonoType, Subst)
 infer' ctx (Var x) = do
   s <- liftMaybe $ at (x-1) ctx
@@ -87,7 +101,7 @@ infer' ctx (App e0 e1) = do
   (t0, s0) <- infer' ctx e0
   (t1, s1) <- infer' (substCtx s0 ctx) e1
   t' <- lift newvar
-  s2 <- liftMaybe $ mgu (subst s1 t0) (t1 :-> t')
+  s2 <- fmap Subst $ liftMaybe $ mgu (subst s1 t0) (t1 :-> t')
   pure $ (subst s2 t', s2 <> s1 <> s0)
 infer' ctx (Abs e) = do
   t <- lift newvar
@@ -114,12 +128,12 @@ check pa pb = flip evalState 0 $ do
   mb <- inst pb
   pure $ isJust $ mgu ma mb
 
--- | Quantifies a 'MonoType' over a set of 'VarType's.
+-- | Quantifies a 'MonoType' over a set of v'VarType's.
 quantifySome :: [VarType] -> MonoType -> PolyType
 quantifySome vt mt = foldr ForAll (Mono mt) bound
   where
   bound = MGU.vars mt `intersect` vt
 
--- | Quantifies a 'MonoType' over all of its 'VarType's.
+-- | Quantifies a 'MonoType' over all of its v'VarType's.
 quantify :: MonoType -> PolyType
 quantify t = quantifySome (MGU.vars t) t

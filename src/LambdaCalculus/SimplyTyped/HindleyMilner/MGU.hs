@@ -8,6 +8,11 @@ import Data.Tuple.Extra (both, second)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
 
 -- | The most general unifier.
+--
+-- Finds a set of substitution which unifies two 'MonoType's.
+--
+-- Returns 'Nothing' if the two can't be unified. Not to be confused with 'Just []'
+-- which means no substitutions are required to unify them (i.e. they are equal).
 mgu :: MonoType -> MonoType -> Maybe [(VarType, MonoType)]
 mgu = \t t' -> go $ S [(t, t')] []
   where
@@ -27,6 +32,7 @@ mgu = \t t' -> go $ S [(t, t')] []
 -- This is a pair of to-be-unified types and found substitutions.
 data MGUState = S [(MonoType, MonoType)] [(VarType, MonoType)]
 
+-- | Collects type variables in a 'MonoType'.
 vars :: MonoType -> [VarType]
 vars = nub . go
   where
@@ -44,6 +50,7 @@ subst x m = go
   go t@(ConstType _) = t
   go (t :-> t') = go t :-> go t'
 
+-- | Applies 'subst' to all of 'MonoType's contained in an 'MGUState'.
 substS :: VarType -> MonoType -> MGUState -> MGUState
 substS x m (S tbd acc) =
   S (map (both   (subst x m)) tbd)
