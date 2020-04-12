@@ -30,18 +30,14 @@ import qualified LambdaCalculus.Genetic
 import qualified LambdaCalculus.InfList as InfList
 import qualified Test.QuickCheck as Q
 
--- TODO lots of functions were copy-pasted from untyped DeBruijn.
-
 -- | Generates a 'Term' with a specified number of free variables and a set of constants.
 --
 -- The size parameter of 'Gen' is used as an average of a number of sub-terms
 -- in a term. Note that there is no upper limit of a size of a generated term;
 -- although rare, a huge term may be generated.
 --
--- If no free variables, @genTerm@ always generates a closed term in a form of an @'Abs' _ _@.
--- TODO Allow @App@ (consider the size)
+-- @genTerm 0@ always generates a closed term in a form of an @('Abs' _)@.
 -- TODO Allow @Const@
--- TODO add another implementation which always yields a well-typed Terms
 genTerm :: [(MonoType, String)] -> Int -> Gen Term
 genTerm constants freeNum = do
   -- see LambdaCalculus.Term.genTerm for explanation of the probability
@@ -80,6 +76,7 @@ genClosedTerm constants = genTerm constants 0
 
 -- | A class for phantom types to control instances of 'Arbitrary'.
 class TypeSet a where
+  -- | A set of constants which may be included in an arbitrary @'ClosedTerm' a@.
   candidateConsts :: proxy a -> [(MonoType, String)]
 
 -- | A closed lambda term. This assumption allows more type instances to be defined.

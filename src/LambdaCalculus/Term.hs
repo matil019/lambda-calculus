@@ -119,7 +119,7 @@ instance Genetic ClosedTerm where
     (child1, child2) <- genCrossover (to parent1, to parent2)
     pure (from child1, from child2)
     where
-    to = DeBruijn.ClosedTerm . snd . toDeBruijn mempty . unClosedTerm
+    to = DeBruijn.toClosedTermUnchecked . snd . toDeBruijn mempty . unClosedTerm
     from = ClosedTerm . fromDeBruijn mempty . DeBruijn.unClosedTerm
 
   genMutant = fmap ClosedTerm . genModifiedTerm Set.empty . unClosedTerm

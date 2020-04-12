@@ -23,8 +23,6 @@ data Term
   | Const MonoType String  -- ^ A constant
   deriving (Eq, Generic, NFData, Show)
 
--- TODO copy-pasted from LambdaCalculus.DeBruijn
-
 -- | Traverses sub-terms in depth-first, pre-order.
 --
 -- This is consistent with 'index':
