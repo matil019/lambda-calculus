@@ -5,7 +5,10 @@ import Control.Monad (mzero)
 import Data.List (nub)
 import Data.Tuple (swap)
 import Data.Tuple.Extra (both, second)
-import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
+import LambdaCalculus.SimplyTyped.HindleyMilner.Types
+  ( MonoType(VarType, ConstType, (:->))
+  , VarType
+  )
 
 -- | The most general unifier.
 --

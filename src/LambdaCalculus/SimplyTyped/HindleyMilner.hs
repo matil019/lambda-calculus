@@ -12,8 +12,12 @@ import Control.Monad.Trans.State.Strict (State, evalState)
 import Data.List (foldl', intersect)
 import Data.Maybe (isJust)
 import LambdaCalculus.SimplyTyped.HindleyMilner.MGU (mgu)
-import LambdaCalculus.SimplyTyped.HindleyMilner.Term -- TODO no all-in import
-import LambdaCalculus.SimplyTyped.HindleyMilner.Types -- TODO no all-in import
+import LambdaCalculus.SimplyTyped.HindleyMilner.Term (Term(Var, Abs, App, Const))
+import LambdaCalculus.SimplyTyped.HindleyMilner.Types
+  ( MonoType((:->), VarType)
+  , PolyType(Mono, ForAll)
+  , VarType
+  )
 import LambdaCalculus.Utils (at)
 
 import qualified Control.Monad.Trans.State.Strict as State
