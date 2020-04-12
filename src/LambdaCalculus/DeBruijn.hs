@@ -9,7 +9,14 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 -- | Lambda terms in De Bruijn index notation.
-module LambdaCalculus.DeBruijn where
+module LambdaCalculus.DeBruijn
+  ( Term
+    ( LambdaCalculus.DeBruijn.Var
+    , LambdaCalculus.DeBruijn.Abs
+    , LambdaCalculus.DeBruijn.App
+    )
+  , module LambdaCalculus.DeBruijn
+  ) where
 
 #if !MIN_VERSION_base(4,11,0)
 import Data.Semigroup ((<>))
