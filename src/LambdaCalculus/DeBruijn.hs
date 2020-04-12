@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -33,14 +34,12 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
 import qualified LambdaCalculus.Genetic
 import qualified LambdaCalculus.InfList as InfList
+import qualified LambdaCalculus.SimplyTyped.HindleyMilner.Term as Typed
 import qualified LambdaCalculus.Term.Types as Term
 import qualified Test.QuickCheck as Q
 
 -- | A lambda term in De Bruijn index notation.
-data Term
-  = Var Int        -- ^ A variable (must start at @1@)
-  | Abs Term       -- ^ An abstraction
-  | App Term Term  -- ^ An application
+newtype Term = Untyped { getTyped :: Typed.Term }
   deriving (Eq, Generic, NFData, Show)
 
 -- | Traverses sub-terms in depth-first, pre-order.
@@ -58,6 +57,24 @@ instance Ixed Term where
 
 type instance Index Term = Int
 type instance IxValue Term = Term
+
+-- | A variable (must start at @1@)
+pattern Var :: Int -> Term
+pattern Var x = Untyped (Typed.Var x)
+
+-- | An abstraction
+pattern Abs :: Term -> Term
+pattern Abs m <- Untyped ((\x -> case x of Typed.Abs m' -> Just (Untyped m'); _ -> Nothing) -> Just m)
+  where Abs (Untyped m) = Untyped (Typed.Abs m)
+
+-- | An application
+pattern App :: Term -> Term -> Term
+pattern App m n <- Untyped ((\x -> case x of Typed.App m' n' -> Just (Untyped m', Untyped n'); _ -> Nothing) -> Just (m, n))
+  where App (Untyped m) (Untyped n) = Untyped (Typed.App m n)
+
+{-# COMPLETE Var, Abs, App #-}
+
+-- TODO remove duplicate functions
 
 -- | A term with additional info about its enclosing term.
 data BoundTerm = BoundTerm
