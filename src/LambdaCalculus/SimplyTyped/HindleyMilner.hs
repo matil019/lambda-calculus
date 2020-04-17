@@ -125,6 +125,7 @@ infer = fmap fst . flip evalState 0 . runMaybeT . infer' freeVarTypes
 --
 -- You may want to apply 'quantify' before 'check' if you wish to compare
 -- 'MonoType's.
+-- TODO take MonoTypes instead of PolyTypes
 check :: PolyType -> PolyType -> Bool
 check pa pb = flip evalState 0 $ do
   ma <- inst pa
