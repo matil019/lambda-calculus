@@ -30,8 +30,9 @@ spec = do
       subst mempty t `shouldBe` t
 
   describe "infer" $ do
-    it "should not infer types of recursive terms" $
-      infer (Abs $ App (Var 1) (Var 1)) `shouldBe` Nothing
+    describe "should not infer types of recursive terms" $
+      it "infer (\\ (1 1)) :: <ill-typed>" $
+        infer (Abs $ App (Var 1) (Var 1)) `shouldBe` Nothing
 
     describe "should not infer types of polymorphic terms" $
       -- here 2 is @id :: a -> a@ which should not be polymorphic in simply typed lambda calculus
@@ -40,20 +41,29 @@ spec = do
         infer (App (Abs $ Abs $ App (App (Var 2) (Const (ConstType "a") "a")) (App (Var 2) (Const (ConstType "b") "b"))) (Abs $ Var 1))
           `shouldBe` Nothing
 
-    it "infer 1 :: a" $
-      Var 1 `shouldTypeCheckWith` (ConstType "a")
+    describe "trivial terms" $ do
+      it "infer 1 :: a" $
+        Var 1 `shouldTypeCheckWith` (ConstType "a")
 
-    it "infer (\\ 1) :: a -> a" $
-      (Abs $ Var 1) `shouldTypeCheckWith` (ConstType "a" :-> ConstType "a")
+      it "infer (\\ 1) :: a -> a" $
+        (Abs $ Var 1) `shouldTypeCheckWith` (ConstType "a" :-> ConstType "a")
 
-    it "infer (\\ \\ 2 1) :: (a -> b) -> a -> b" $
-      (Abs $ Abs $ App (Var 2) (Var 1)) `shouldTypeCheckWith`
-        ((ConstType "a" :-> ConstType "b") :-> ConstType "a" :-> ConstType "b")
+    describe "Church numerals" $ do
+      it "infer #0 = (\\ \\ 1) :: a -> b -> b" $
+        (Abs $ Abs $ Var 1) `shouldTypeCheckWith` (ConstType "a" :-> ConstType "b" :-> ConstType "b")
 
-    it "infer (\\ \\ 2 (2 1)) :: (a -> a) -> a -> a" $
-      (Abs $ Abs $ App (Var 2) $ App (Var 2) $ Var 1) `shouldTypeCheckWith`
-        ((ConstType "a" :-> ConstType "a") :-> ConstType "a" :-> ConstType "a")
+      it "infer #1 = (\\ \\ 2 1) :: (a -> b) -> a -> b" $
+        (Abs $ Abs $ App (Var 2) (Var 1)) `shouldTypeCheckWith`
+          ((ConstType "a" :-> ConstType "b") :-> ConstType "a" :-> ConstType "b")
 
-    it "*not* infer (\\ \\ 2 (2 1)) :: (a -> b) -> a -> b" $
-      (Abs $ Abs $ App (Var 2) $ App (Var 2) $ Var 1) `shouldNotTypeCheckWith`
-        ((ConstType "a" :-> ConstType "b") :-> ConstType "a" :-> ConstType "b")
+      it "infer #2 = (\\ \\ 2 (2 1)) :: (a -> a) -> a -> a" $
+        (Abs $ Abs $ App (Var 2) $ App (Var 2) $ Var 1) `shouldTypeCheckWith`
+          ((ConstType "a" :-> ConstType "a") :-> ConstType "a" :-> ConstType "a")
+
+      it "*not* infer #2 = (\\ \\ 2 (2 1)) :: (a -> b) -> a -> b" $
+        (Abs $ Abs $ App (Var 2) $ App (Var 2) $ Var 1) `shouldNotTypeCheckWith`
+          ((ConstType "a" :-> ConstType "b") :-> ConstType "a" :-> ConstType "b")
+
+      it "infer #3 = (\\ \\ 2 (2 (2 1))) :: (a -> a) -> a -> a" $
+        (Abs $ Abs $ App (Var 2) $ App (Var 2) $ App (Var 2) $ Var 1) `shouldTypeCheckWith`
+          ((ConstType "a" :-> ConstType "a") :-> ConstType "a" :-> ConstType "a")
