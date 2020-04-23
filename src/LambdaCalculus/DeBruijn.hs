@@ -12,13 +12,27 @@
 {-# LANGUAGE ViewPatterns #-}
 -- | Lambda terms in De Bruijn index notation.
 module LambdaCalculus.DeBruijn
-  ( Term
+  ( -- * Terms
+    Term
     ( ..
     , LambdaCalculus.DeBruijn.Var
     , LambdaCalculus.DeBruijn.Abs
     , LambdaCalculus.DeBruijn.App
     )
-  , module LambdaCalculus.DeBruijn
+  , -- ** Conversions with other notations
+    toDeBruijn, fromDeBruijn
+  , -- ** Basic operations
+    formatTerm, countTerm, isClosed
+  , -- ** Accessors and lists
+    linear, toList, index, ixBound, BoundTerm(..)
+  , -- ** Closed terms
+    ClosedTerm(..), NoConstants, unClosedTerm, toClosedTermUnchecked
+  , -- ** Generating terms
+    genTerm, genModifiedTerm
+  , -- ** Reductions
+    substitute, reduceBeta, reduceStep, reduceSteps
+  , -- ** Church encodings
+    encodeChurchNumber, genChurchNumber, interpretChurchNumber, interpretChurchPair
   ) where
 
 #if !MIN_VERSION_base(4,11,0)
@@ -48,7 +62,10 @@ import qualified Test.QuickCheck as Q
 --
 -- This is implemented as a newtype of 'Typed.Term' because untyped terms are
 -- equivalent with typed terms in which constants never appear.
-newtype Term = Untyped { getTyped :: Typed.Term }
+newtype Term = Untyped
+  { -- | This term should not contain 'Typed.Const'!
+    getTyped :: Typed.Term
+  }
   deriving stock (Generic)
   deriving newtype (Eq, NFData, Show)
 
