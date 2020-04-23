@@ -122,15 +122,8 @@ infer = fmap fst . flip evalState 0 . runMaybeT . infer' freeVarTypes
   freeVarTypes = repeat $ ForAll "a" (Mono (VarType "a"))
 
 -- | Checks if two types are compatible (aka unify).
---
--- You may want to apply 'quantify' before 'check' if you wish to compare
--- 'MonoType's.
--- TODO take MonoTypes instead of PolyTypes
-check :: PolyType -> PolyType -> Bool
-check pa pb = flip evalState 0 $ do
-  ma <- inst pa
-  mb <- inst pb
-  pure $ isJust $ mgu ma mb
+check :: MonoType -> MonoType -> Bool
+check ma mb = isJust $ mgu ma mb
 
 -- | Quantifies a 'MonoType' over a set of v'VarType's.
 quantifySome :: [VarType] -> MonoType -> PolyType

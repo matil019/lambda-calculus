@@ -1,6 +1,5 @@
 module LambdaCalculus.SimplyTyped.HindleyMilnerSpec where
 
-import Data.Maybe (fromJust, isJust)
 import LambdaCalculus.SimplyTyped.HindleyMilner
 import LambdaCalculus.SimplyTyped.HindleyMilner.Term
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types
@@ -8,13 +7,18 @@ import LambdaCalculus.SimplyTyped.HindleyMilner.Instances ()
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 
-shouldTypeCheckWith :: Term -> PolyType -> Expectation
-shouldTypeCheckWith m p = infer m `shouldSatisfy` \mt ->
-  if isJust mt then check (quantify (fromJust mt)) p else False
+shouldTypeCheckWith :: Term -> MonoType -> Expectation
+shouldTypeCheckWith m t' = infer m `shouldSatisfy` \mt ->
+  case mt of
+    Just t -> check t' t
+    _ -> False
 
-shouldNotTypeCheckWith :: Term -> PolyType -> Expectation
-shouldNotTypeCheckWith m p = infer m `shouldNotSatisfy` \mt ->
-  if isJust mt then check (quantify (fromJust mt)) p else False
+-- note that this is /not/ equiavelent to @not . shouldTypeCheckWith@
+shouldNotTypeCheckWith :: Term -> MonoType -> Expectation
+shouldNotTypeCheckWith m t' = infer m `shouldSatisfy` \mt ->
+  case mt of
+    Just t -> not $ check t' t
+    _ -> False
 
 spec :: Spec
 spec = do
@@ -30,20 +34,19 @@ spec = do
       infer (Abs $ App (Var 1) (Var 1)) `shouldBe` Nothing
 
     it "infer 1 :: a" $
-      Var 1 `shouldTypeCheckWith` (quantify $ VarType "a")
+      Var 1 `shouldTypeCheckWith` (ConstType "a")
 
     it "infer (\\ 1) :: a -> a" $
-      (Abs $ Var 1) `shouldTypeCheckWith` (quantify $ VarType "a" :-> VarType "a")
+      (Abs $ Var 1) `shouldTypeCheckWith` (ConstType "a" :-> ConstType "a")
 
     it "infer (\\ \\ 2 1) :: (a -> b) -> a -> b" $
       (Abs $ Abs $ App (Var 2) (Var 1)) `shouldTypeCheckWith`
-        (quantify $ (VarType "a" :-> VarType "b") :-> VarType "a" :-> VarType "b")
+        ((ConstType "a" :-> ConstType "b") :-> ConstType "a" :-> ConstType "b")
 
     it "infer (\\ \\ 2 (2 1)) :: (a -> a) -> a -> a" $
       (Abs $ Abs $ App (Var 2) $ App (Var 2) $ Var 1) `shouldTypeCheckWith`
-        (quantify $ (VarType "a" :-> VarType "a") :-> VarType "a" :-> VarType "a")
+        ((ConstType "a" :-> ConstType "a") :-> ConstType "a" :-> ConstType "a")
 
-    -- TODO this should fail but doesn't
-    xit "*not* infer (\\ \\ 2 (2 1)) :: (a -> b) -> a -> b" $
+    it "*not* infer (\\ \\ 2 (2 1)) :: (a -> b) -> a -> b" $
       (Abs $ Abs $ App (Var 2) $ App (Var 2) $ Var 1) `shouldNotTypeCheckWith`
-        (quantify $ (VarType "a" :-> VarType "b") :-> VarType "a" :-> VarType "b")
+        ((ConstType "a" :-> ConstType "b") :-> ConstType "a" :-> ConstType "b")
