@@ -67,3 +67,8 @@ spec = do
       it "infer #3 = (\\ \\ 2 (2 (2 1))) :: (a -> a) -> a -> a" $
         (Abs $ Abs $ App (Var 2) $ App (Var 2) $ App (Var 2) $ Var 1) `shouldTypeCheckWith`
           ((ConstType "a" :-> ConstType "a") :-> ConstType "a" :-> ConstType "a")
+
+    describe "Churce pairs" $ do
+      it "infer pair = (\\ \\ \\ 1 3 2) :: a -> b -> (a -> b -> c) -> c" $
+        (Abs $ Abs $ Abs $ App (App (Var 1) (Var 3)) (Var 2)) `shouldTypeCheckWith`
+          (ConstType "a" :-> ConstType "b" :-> (ConstType "a" :-> ConstType "b" :-> ConstType "c") :-> ConstType "c")
