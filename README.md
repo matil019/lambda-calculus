@@ -1,6 +1,6 @@
-# Untyped Lambda Calculus and Genetic Algorithm in Haskell
+# Lambda Calculus and Genetic Algorithm in Haskell
 
-This is an implementation of [(untyped) lambda calculus][wikip-lc] in Haskell, combined with [genetic algorithm][wikip-ga]. Both are written from scratch, just for fun!
+This is an implementation of untyped and simply-typed [lambda calculus][wikip-lc] in Haskell, combined with [genetic algorithm][wikip-ga]. Both are written from scratch, just for fun!
 
 [wikip-lc]: https://en.wikipedia.org/wiki/Lambda_calculus
 [wikip-ga]: https://en.wikipedia.org/wiki/Genetic_algorithm
