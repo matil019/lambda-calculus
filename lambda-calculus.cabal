@@ -41,7 +41,7 @@ library
                      , lens
                      , mtl
                      , random
-                     , stm
+                     , stm >=2.5
                      , stm-chans
                      , transformers
                      , unliftio

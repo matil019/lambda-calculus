@@ -1,13 +1,8 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 -- | A general-purpose Genetic Algorithm stuff.
 module LambdaCalculus.Genetic where
-
-#if !MIN_VERSION_base(4,11,0)
-import Data.Semigroup ((<>))
-#endif
 
 import Control.Monad (replicateM)
 import Numeric.Natural (Natural)

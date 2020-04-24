@@ -1,18 +1,7 @@
 #!/bin/bash
 
 update() {
-  docker run --rm -i -w "$PWD" -v "$PWD:$PWD" -v tmphs:/root haskell:8.0 cabal update
-  docker run --rm -i -w "$PWD" -v "$PWD:$PWD" -v tmphs:/root haskell:8.2 cabal new-update
-}
-
-ghc80() {
-  docker run --rm -i -w "$PWD" -v "$PWD:$PWD" -v tmphs:/root haskell:8.0 cabal install --dep
-  docker run --rm -i -w "$PWD" -v "$PWD:$PWD" -v tmphs:/root haskell:8.0 cabal configure
-  docker run --rm -i -w "$PWD" -v "$PWD:$PWD" -v tmphs:/root haskell:8.0 cabal build
-}
-
-ghc82() {
-  docker run --rm -i -w "$PWD" -v "$PWD:$PWD" -v tmphs:/root haskell:8.2 cabal new-build
+  docker run --rm -i -w "$PWD" -v "$PWD:$PWD" -v tmphs:/root haskell:8.4 cabal v2-update
 }
 
 ghc84() {
@@ -24,13 +13,11 @@ ghc86() {
 }
 
 main() {
+  set -e
+  trap 'echo This script created a docker volume "tmphs". You may be interested in removing it' exit
   update
-  ghc80 &
-  ghc82 &
-  ghc84 &
-  ghc86 &
-  wait
-  echo 'This script created a docker volume "tmphs". You may be interested in removing it' >&2
+  ghc84
+  ghc86
 }
 
 main "$@"

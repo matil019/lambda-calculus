@@ -1,5 +1,4 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -9,10 +8,6 @@
 {-# LANGUAGE TupleSections #-}
 -- | The main function and utilities.
 module LambdaCalculus.Main where
-
-#if !MIN_VERSION_base(4,11,0)
-import Data.Semigroup ((<>))
-#endif
 
 import Control.Concurrent.Async (async, wait)
 import Control.Concurrent.STM (TVar, atomically, newTVarIO, stateTVar)
