@@ -9,7 +9,7 @@
 module LambdaCalculus.SimplyTyped.HindleyMilner.Term where
 
 import Control.DeepSeq (NFData)
-import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix, preview)
+import Control.Lens (Index, IxValue, Ixed, Plated, Traversal, Traversal', ix, plate, preview)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import GHC.Generics (Generic)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types (MonoType)
@@ -42,6 +42,12 @@ instance Ixed Term where
 
 type instance Index Term = Int
 type instance IxValue Term = Term
+
+instance Plated Term where
+  plate _ m@(Var _)     = pure m
+  plate f (Abs m)       = Abs <$> f m
+  plate f (App m n)     = App <$> f m <*> f n
+  plate _ m@(Const _ _) = pure m
 
 -- | A term with additional info about its enclosing term.
 data BoundTerm = BoundTerm
