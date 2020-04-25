@@ -8,11 +8,11 @@
 -- | Simply-typed terms in De Bruijn index notation and some high-level stuff.
 module LambdaCalculus.SimplyTyped.DeBruijn
   ( -- * Types
-    VarType, MonoType(..), formatMonoType, PolyType(..)
+    VarType, MonoType(..), formatMonoType, parseMonoType, PolyType(..)
   , -- * Terms
     Term(..)
   , -- ** Basic operations
-    formatTerm, countTerm, isClosed
+    formatTerm, parseTerm, countTerm, isClosed
   , -- ** Accessors and lists
     linear, toList, index, ixBound, BoundTerm(..)
   , -- ** Type inference
@@ -38,6 +38,7 @@ import GHC.Generics (Generic)
 import LambdaCalculus.Genetic (Genetic, genCrossover)
 import LambdaCalculus.InfList (InfList)
 import LambdaCalculus.SimplyTyped.HindleyMilner (check, infer, quantify)
+import LambdaCalculus.SimplyTyped.HindleyMilner.Parse (parseMonoType, parseTerm)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Term
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types
   ( MonoType((:->), ConstType, VarType)
