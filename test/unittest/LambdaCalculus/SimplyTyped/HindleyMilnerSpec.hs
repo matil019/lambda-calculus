@@ -38,7 +38,7 @@ spec = do
       -- here 2 is @id :: a -> a@ which should not be polymorphic in simply typed lambda calculus
       -- if it were polymorphic, it would be inferred as @(a -> b -> t) -> a -> b -> t@
       it "infer (\\ \\ 1 (2 (\"a\" :: \"a\")) (2 (\"b\" :: \"b\"))) (\\ 1) :: <ill-typed>" $
-        infer (App (Abs $ Abs $ App (App (Var 2) (Const (ConstType "a") "a")) (App (Var 2) (Const (ConstType "b") "b"))) (Abs $ Var 1))
+        infer (App (Abs $ Abs $ App (App (Var 1) (App (Var 2) (Const (ConstType "a") "a"))) (App (Var 2) (Const (ConstType "b") "b"))) (Abs $ Var 1))
           `shouldBe` Nothing
 
     describe "trivial terms" $ do
