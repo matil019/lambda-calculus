@@ -1,9 +1,10 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 module LambdaCalculus.SimplyTyped.HindleyMilner.TypesSpec where
 
-import Control.Lens (Lens', Traversal', set, view)
+import Control.Lens (Lens', Traversal', plate, set, view)
 import Data.Functor.Compose (Compose(Compose), getCompose)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types.Instances ()
@@ -43,6 +44,14 @@ lensLawSpec l = do
 
 spec :: Spec
 spec = do
+  describe "plate @MonoType" $ do
+    describe "should follow the traversal law" $
+      traversalLawSpec (plate @MonoType)
+
+  describe "topMono" $ do
+    describe "should follow the lens law" $
+      lensLawSpec boundVars
+
   describe "boundVars" $ do
     prop "set boundVars [] should remove all bindings" $ \s ->
       set boundVars [] s `shouldBe` Mono (view topMono s)

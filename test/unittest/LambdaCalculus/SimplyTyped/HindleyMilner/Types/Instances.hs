@@ -2,7 +2,7 @@
 module LambdaCalculus.SimplyTyped.HindleyMilner.Types.Instances where
 
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types
-import Test.QuickCheck (Arbitrary, arbitrary)
+import Test.QuickCheck (Arbitrary, CoArbitrary, Function, arbitrary)
 
 import qualified LambdaCalculus.SimplyTyped.HindleyMilner.MGU as MGU
 import qualified Test.QuickCheck as Q
@@ -21,6 +21,10 @@ instance Arbitrary MonoType where
     genConst = ConstType <$> arbitrary
     -- 2X + 1
     genMono = (:->) <$> arbitrary <*> arbitrary
+
+instance CoArbitrary MonoType
+
+instance Function MonoType
 
 instance Arbitrary PolyType where
   arbitrary = Q.oneof [genMono, genBound1, genBoundSome, genBoundAll]
