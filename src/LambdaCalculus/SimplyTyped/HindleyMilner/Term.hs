@@ -13,6 +13,7 @@ import Control.Lens (Index, IxValue, Ixed, Plated, Traversal, Traversal', ix, pl
 import Data.List.NonEmpty (NonEmpty((:|)))
 import GHC.Generics (Generic)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types (MonoType, formatMonoType)
+import LambdaCalculus.Utils (isSimpleIdent)
 
 import qualified Data.List.NonEmpty as NE
 
@@ -79,7 +80,9 @@ ixBound = loop 0
 -- | Formats a 'Term' into a human-readable string.
 formatTerm :: Term -> String
 formatTerm (Var x) = show x
-formatTerm (Const t a) = "(" <> a <> " :: " <> formatMonoType t <> ")"
+formatTerm (Const t a) = "(" <> a' <> " :: " <> formatMonoType t <> ")"
+  where
+  a' = if isSimpleIdent a then a else show a
 formatTerm (Abs m) = "\\ " <> formatTerm m
 formatTerm (App m n)
    = (case m of Abs _ -> paren; _ -> id;) (formatTerm m)

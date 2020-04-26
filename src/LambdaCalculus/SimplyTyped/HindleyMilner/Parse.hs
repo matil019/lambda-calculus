@@ -13,15 +13,8 @@ import qualified Text.Read.Lex as L
 
 -- | Parses a 'String' into a 'Term'.
 --
--- This is an inverse of 'formatTerm' i.e.
---
--- @
--- 'parseTerm' . 'formatTerm' ≡ pure
--- @
---
--- Currently no extra parentheses are allowed. TODO allow this
---
--- TODO add a test to make sure
+-- If a term contains any 'Const', its annotation must satisfy the restrictions of
+-- 'parseMonoType'. Other than that, this is an inverse of 'formatTerm'.
 parseTerm :: String -> Maybe Term
 parseTerm = accept . readP_to_S parseTermP
 
