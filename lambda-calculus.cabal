@@ -65,6 +65,7 @@ test-suite unittest
   other-modules:       LambdaCalculus.DeBruijnSpec
                        LambdaCalculus.SimplyTyped.HindleyMilner.Instances
                        LambdaCalculus.SimplyTyped.HindleyMilner.ParseSpec
+                       LambdaCalculus.SimplyTyped.HindleyMilner.Term.Instances
                        LambdaCalculus.SimplyTyped.HindleyMilner.Types.Instances
                        LambdaCalculus.SimplyTyped.HindleyMilner.TypesSpec
                        LambdaCalculus.SimplyTyped.HindleyMilnerSpec
