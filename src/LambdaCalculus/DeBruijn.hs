@@ -35,7 +35,7 @@ module LambdaCalculus.DeBruijn
   ) where
 
 import Control.DeepSeq (NFData)
-import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix, preview)
+import Control.Lens (Index, IxValue, Ixed, Plated, Traversal, Traversal', ix, plate, preview)
 import Control.Monad.Trans.State.Strict (State, runState, state)
 import Data.Coerce (coerce)
 import Data.Conduit ((.|), ConduitT)
@@ -79,6 +79,11 @@ instance Ixed Term where
 
 type instance Index Term = Int
 type instance IxValue Term = Term
+
+instance Plated Term where
+  plate _ m@(Var _) = pure m
+  plate f (Abs m)   = Abs <$> f m
+  plate f (App m n) = App <$> f m <*> f n
 
 -- | A variable (must start at @1@)
 pattern Var :: Int -> Term

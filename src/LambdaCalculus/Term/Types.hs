@@ -8,7 +8,7 @@
 module LambdaCalculus.Term.Types where
 
 import Control.DeepSeq (NFData)
-import Control.Lens (Index, IxValue, Ixed, Traversal, Traversal', ix)
+import Control.Lens (Index, IxValue, Ixed, Plated, Traversal, Traversal', ix, plate)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Set (Set)
 import LambdaCalculus.Utils (at)
@@ -51,6 +51,11 @@ instance Ixed Term where
 
 type instance Index Term = Int
 type instance IxValue Term = Term
+
+instance Plated Term where
+  plate _ m@(Var _) = pure m
+  plate f (Abs x m) = Abs x <$> f m
+  plate f (App m n) = App <$> f m <*> f n
 
 -- | A smart constructor which matches 'termRaw' and handles other fields transparently.
 pattern Var :: Var -> Term
