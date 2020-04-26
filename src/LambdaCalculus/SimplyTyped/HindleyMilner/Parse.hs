@@ -1,30 +1,33 @@
 {-# LANGUAGE LambdaCase #-}
+-- | Parses terms and types from human-friendly strings.
 module LambdaCalculus.SimplyTyped.HindleyMilner.Parse (parseMonoType, parseTerm) where
-
--- TODO no all-in imports
-import LambdaCalculus.SimplyTyped.HindleyMilner.Term
-import LambdaCalculus.SimplyTyped.HindleyMilner.Types
-import Text.ParserCombinators.ReadP
 
 import Control.Monad (guard, mzero)
 import Data.Char (isLower, isSpace, isUpper)
+import LambdaCalculus.SimplyTyped.HindleyMilner.Term (Term(Abs, App, Const, Var))
+import LambdaCalculus.SimplyTyped.HindleyMilner.Types (MonoType((:->), ConstType, VarType), VarType)
+import Text.ParserCombinators.ReadP ((+++), (<++), ReadP, between, char, readP_to_S, skipSpaces)
 
 import qualified Text.Read.Lex as L
 
 -- | Parses a 'String' into a 'Term'.
 --
 -- If a term contains any 'Const', its annotation must satisfy the restrictions of
--- 'parseMonoType'. Other than that, this is an inverse of 'formatTerm'.
+-- 'parseMonoType'. Other than that, this is an inverse of
+-- 'LambdaCalculus.SimplyTyped.HindleyMilner.Term.formatTerm'.
+--
+-- - Currently no extra parentheses are allowed. TODO allow this
 parseTerm :: String -> Maybe Term
 parseTerm = accept . readP_to_S parseTermP
 
 -- | Parses a 'String' into a 'MonoType'.
 --
--- This is mostly an inverse of 'formatMonoType', with the following restrictions:
+-- This is mostly an inverse of 'LambdaCalculus.SimplyTyped.HindleyMilner.Types.formatMonoType',
+-- with the following restrictions:
 --
 -- - A name must be a valid Haskell non-symbolic identifier.
 -- - A name beginning with an uppercase letter is parsed as a 'ConstType', and
---   otherwise 'VarType'.
+--   otherwise v'VarType'.
 -- - Currently no extra parentheses are allowed. TODO allow this
 parseMonoType :: String -> Maybe MonoType
 parseMonoType = accept . readP_to_S parseMonoTypeP
@@ -122,6 +125,6 @@ parseIdentifier =
 inParen :: ReadP a -> ReadP a
 inParen = between (skipSpaces >> char '(') (skipSpaces >> char ')')
 
--- | Like 'many', but biased on consuming as many as possible.
+-- | Like 'Text.ParserCombinators.ReadP.many', but biased on parsing input as many as possible.
 amap :: ReadP a -> ReadP [a]
 amap p = ((:) <$> p <*> amap p) <++ pure []
