@@ -6,6 +6,7 @@ module LambdaCalculus.SimplyTyped.HindleyMilner.Types where
 import Control.DeepSeq (NFData)
 import Control.Lens (Lens', Plated, plate)
 import GHC.Generics (Generic)
+import LambdaCalculus.Utils (isSimpleIdent)
 
 -- | A type variable representation.
 type VarType = String
@@ -25,8 +26,8 @@ instance Plated MonoType where
 
 -- | Formats a 'MonoType' into a human-readable string.
 formatMonoType :: MonoType -> String
-formatMonoType (VarType x) = x
-formatMonoType (ConstType c) = c
+formatMonoType (VarType x)   = if isSimpleIdent x then x else show x
+formatMonoType (ConstType c) = if isSimpleIdent c then c else show c
 formatMonoType (t :-> u) =
   decorate (formatMonoType t) <> " -> " <> formatMonoType u
   where

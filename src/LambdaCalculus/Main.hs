@@ -39,7 +39,8 @@ import LambdaCalculus.SimplyTyped.DeBruijn
   )
 import LambdaCalculus.Genetic (Individual(Individual), newGeneration)
 import Numeric.Natural (Natural)
-import System.Environment (getArgs)
+import System.Environment (getArgs, withArgs)
+import System.Exit (exitSuccess)
 import System.IO (BufferMode(LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
 import System.Random (split)
 import System.Time.Extra (Seconds, duration)
@@ -53,6 +54,7 @@ import qualified Control.Monad.Reader as Reader
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.List.NonEmpty as NE
+import qualified LambdaCalculus.Main.Repl as Repl
 import qualified Test.QuickCheck as Q
 
 -- | Calculates an average.
@@ -143,6 +145,13 @@ data Event
 -- | The main function.
 main :: IO ()
 main = do
+  -- start repl if the first argument is "repl"
+  do
+    args <- getArgs
+    case args of
+      ("repl":more) -> withArgs more Repl.main >> exitSuccess
+      _ -> pure ()
+
   hSetBuffering stdout LineBuffering
   seed <- do
     args <- getArgs

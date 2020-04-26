@@ -22,9 +22,11 @@ library
                        LambdaCalculus.Genetic
                        LambdaCalculus.InfList
                        LambdaCalculus.Main
+                       LambdaCalculus.Main.Repl
                        LambdaCalculus.SimplyTyped.DeBruijn
                        LambdaCalculus.SimplyTyped.HindleyMilner
                        LambdaCalculus.SimplyTyped.HindleyMilner.MGU
+                       LambdaCalculus.SimplyTyped.HindleyMilner.Parse
                        LambdaCalculus.SimplyTyped.HindleyMilner.Term
                        LambdaCalculus.SimplyTyped.HindleyMilner.Types
                        LambdaCalculus.Term
@@ -63,6 +65,8 @@ test-suite unittest
   main-is:             Main.hs
   other-modules:       LambdaCalculus.DeBruijnSpec
                        LambdaCalculus.SimplyTyped.HindleyMilner.Instances
+                       LambdaCalculus.SimplyTyped.HindleyMilner.ParseSpec
+                       LambdaCalculus.SimplyTyped.HindleyMilner.Term.Instances
                        LambdaCalculus.SimplyTyped.HindleyMilner.Types.Instances
                        LambdaCalculus.SimplyTyped.HindleyMilner.TypesSpec
                        LambdaCalculus.SimplyTyped.HindleyMilnerSpec
