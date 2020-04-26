@@ -83,9 +83,9 @@ parseConst = inParen $ do
 
 parseMonoTypeP :: ReadP MonoType
 parseMonoTypeP
-    = fmap VarType parseVarType
-  +++ fmap ConstType parseConstType
-  +++ fmap (uncurry (:->)) parseFuncType
+    = fmap (uncurry (:->)) parseFuncType
+  <++ fmap ConstType parseConstType
+  <++ fmap VarType parseVarType
 
 parseVarType :: ReadP VarType
 parseVarType = do
