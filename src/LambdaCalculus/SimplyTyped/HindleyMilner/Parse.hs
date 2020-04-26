@@ -45,10 +45,10 @@ accept _ = Nothing
 
 parseTermP :: ReadP Term
 parseTermP
-    = fmap Var parseVar
-  +++ fmap Abs parseAbs
-  +++ fmap (uncurry App) parseApp
-  +++ fmap (uncurry Const) parseConst
+    = fmap (uncurry App) parseApp
+  <++ fmap Abs parseAbs
+  <++ fmap Var parseVar
+  <++ fmap (uncurry Const) parseConst
 
 parseVar :: ReadP Int
 parseVar = do
