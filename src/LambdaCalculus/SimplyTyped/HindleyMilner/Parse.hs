@@ -64,15 +64,20 @@ parseAbs = do
 
 parseApp :: ReadP (Term, Term)
 parseApp = do
-  m <- (inParen $ fmap Abs parseAbs)
-       +++ fmap (uncurry App) parseApp
-       +++ fmap Var parseVar
-       +++ fmap (uncurry Const) parseConst
-  n <- (inParen $ fmap Abs parseAbs)
-       +++ (inParen $ fmap (uncurry App) parseApp)
-       +++ fmap Var parseVar
-       +++ fmap (uncurry Const) parseConst
-  pure (m, n)
+  hd <- (inParen $ fmap Abs parseAbs)
+       <++ fmap Var parseVar
+       <++ fmap (uncurry Const) parseConst
+  arg1 <- parseArg
+  args <- amap parseArg
+  pure $ go hd arg1 args
+  where
+  parseArg
+      = (inParen $ fmap Abs parseAbs)
+    <++ fmap Var parseVar
+    <++ fmap (uncurry Const) parseConst
+    <++ (inParen $ fmap (uncurry App) parseApp)
+  go hd arg1 [] = (hd, arg1)
+  go hd arg1 (arg2:args) = go (App hd arg1) arg2 args
 
 parseConst :: ReadP (MonoType, String)
 parseConst = inParen $ do
@@ -123,3 +128,7 @@ parseIdentifier =
 
 inParen :: ReadP a -> ReadP a
 inParen = between (skipSpaces >> char '(') (skipSpaces >> char ')')
+
+-- | Like 'many', but biased on consuming as many as possible.
+amap :: ReadP a -> ReadP [a]
+amap p = ((:) <$> p <*> amap p) <++ pure []
