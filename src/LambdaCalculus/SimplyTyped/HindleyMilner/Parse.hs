@@ -6,8 +6,8 @@ import LambdaCalculus.SimplyTyped.HindleyMilner.Term
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types
 import Text.ParserCombinators.ReadP
 
-import Control.Monad (mzero)
-import Data.Char (isSpace)
+import Control.Monad (guard, mzero)
+import Data.Char (isLower, isSpace, isUpper)
 
 import qualified Text.Read.Lex as L
 
@@ -27,15 +27,12 @@ parseTerm = accept . readP_to_S parseTermP
 
 -- | Parses a 'String' into a 'MonoType'.
 --
--- This is an inverse of 'formatMonoType' i.e.
+-- This is mostly an inverse of 'formatMonoType', with the following restrictions:
 --
--- @
--- 'parseMonoType' . 'formatMonoType' ≡ pure
--- @
---
--- Currently no extra parentheses are allowed. TODO allow this
---
--- TODO add a test to make sure
+-- - A name must be a valid Haskell non-symbolic identifier.
+-- - A name beginning with an uppercase letter is parsed as a 'ConstType', and
+--   otherwise 'VarType'.
+-- - Currently no extra parentheses are allowed. TODO allow this
 parseMonoType :: String -> Maybe MonoType
 parseMonoType = accept . readP_to_S parseMonoTypeP
 
@@ -91,14 +88,24 @@ parseMonoTypeP
   +++ fmap (uncurry (:->)) parseFuncType
 
 parseVarType :: ReadP VarType
-parseVarType = parseIdentifier
+parseVarType = do
+  x <- parseIdentifier
+  guard $ case x of
+    (h:_) -> isLower h || h == '_'
+    _ -> False
+  pure x
 
 parseConstType :: ReadP String
-parseConstType = parseIdentifier
+parseConstType = do
+  x <- parseIdentifier
+  guard $ case x of
+    -- note that @isUpper '_' == False@
+    (h:_) -> isUpper h
+    _ -> False
+  pure x
 
 parseFuncType :: ReadP (MonoType, MonoType)
 parseFuncType = do
-  skipSpaces
   t <- (inParen $ fmap (uncurry (:->)) parseFuncType)
        +++ fmap VarType parseVarType
        +++ fmap ConstType parseConstType
