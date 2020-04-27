@@ -64,6 +64,7 @@ test-suite unittest
   type:                exitcode-stdio-1.0
   main-is:             Main.hs
   other-modules:       LambdaCalculus.DeBruijnSpec
+                       LambdaCalculus.SimplyTyped.DeBruijnSpec
                        LambdaCalculus.SimplyTyped.HindleyMilner.Instances
                        LambdaCalculus.SimplyTyped.HindleyMilner.ParseSpec
                        LambdaCalculus.SimplyTyped.HindleyMilner.Term.Instances
@@ -78,6 +79,7 @@ test-suite unittest
                      , extra
                      , hspec
                      , lens
+                     , quickcheck-instances
   hs-source-dirs:      test/unittest
   default-language:    Haskell2010
   ghc-options:         -Wall -fdefer-typed-holes
