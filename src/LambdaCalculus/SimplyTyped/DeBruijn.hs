@@ -20,6 +20,7 @@ module LambdaCalculus.SimplyTyped.DeBruijn
   , -- ** Closed terms
     ClosedTerm(..), TypeSet(..), closedTerm, _closedTerm
   , -- ** Generating terms
+    -- | Generated terms may or may not be well-typed.
     genTerm, genModifiedTerm, genClosedTerm
   , -- ** Reductions
     -- | These functions do /not/ consider types, because substitution is independent of typing.
@@ -54,7 +55,8 @@ import qualified LambdaCalculus.Genetic
 import qualified LambdaCalculus.InfList as InfList
 import qualified Test.QuickCheck as Q
 
--- | Generates a 'Term' with a specified number of free variables and a set of constants.
+-- | Generates a 'Term' with a specified number of free variables and a set of
+-- constants.
 --
 -- The size parameter of 'Gen' is used as an average of a number of sub-terms
 -- in a term. Note that there is no upper limit of a size of a generated term;
@@ -95,8 +97,8 @@ genModifiedTerm constants freeNum m = do
   flip (ixBound i) m $ \BoundTerm{boundNum} -> genTerm constants $ boundNum + freeNum
 
 -- | Generates a closed 'Term'.
-genClosedTerm :: [(MonoType, String)] -> Gen Term
-genClosedTerm constants = genTerm constants 0
+genClosedTerm :: [(MonoType, String)] -> Gen (ClosedTerm a)
+genClosedTerm constants = ClosedTerm <$> genTerm constants 0
 
 -- | A class for phantom types to control instances of 'Arbitrary'.
 class TypeSet a where
@@ -110,7 +112,7 @@ newtype ClosedTerm a = ClosedTerm { unClosedTerm :: Term }
   deriving (Eq, Generic, NFData, Show)
 
 instance TypeSet a => Arbitrary (ClosedTerm a) where
-  arbitrary = ClosedTerm <$> genClosedTerm (candidateConsts (Proxy :: Proxy a))
+  arbitrary = genClosedTerm (candidateConsts (Proxy :: Proxy a))
 
 instance Ixed (ClosedTerm a) where
   ix :: Int -> Traversal' (ClosedTerm a) Term
