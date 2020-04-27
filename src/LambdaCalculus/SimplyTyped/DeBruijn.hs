@@ -18,7 +18,7 @@ module LambdaCalculus.SimplyTyped.DeBruijn
   , -- ** Type inference
     infer, check, quantify
   , -- ** Closed terms
-    ClosedTerm(..), TypeSet(..)
+    ClosedTerm(..), TypeSet(..), closedTerm, _closedTerm
   , -- ** Generating terms
     genTerm, genModifiedTerm, genClosedTerm
   , -- ** Reductions
@@ -29,7 +29,7 @@ module LambdaCalculus.SimplyTyped.DeBruijn
   ) where
 
 import Control.DeepSeq (NFData)
-import Control.Lens (Index, IxValue, Ixed, Traversal', ix, preview, set)
+import Control.Lens (Index, IxValue, Ixed, Prism, Traversal', ix, preview, prism', set)
 import Data.Conduit (ConduitT)
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(Proxy))
@@ -144,6 +144,16 @@ instance TypeSet a => Genetic (ClosedTerm a) where
   genMutant = fmap ClosedTerm
     . genModifiedTerm (candidateConsts (Proxy :: Proxy a)) 0
     . unClosedTerm
+
+-- | A smart constructor of 'ClosedTerm' which checks whether a 'Term' is
+-- closed, and converts it into a 'ClosedTerm' if it is the case.
+closedTerm :: Term -> Maybe (ClosedTerm a)
+closedTerm m | isClosed m = Just (ClosedTerm m)
+closedTerm _ = Nothing
+
+-- | A prism version of 'closedTerm'.
+_closedTerm :: Prism Term Term (ClosedTerm a) (ClosedTerm b)
+_closedTerm = prism' unClosedTerm closedTerm
 
 -- | Performs a substitution.
 --
