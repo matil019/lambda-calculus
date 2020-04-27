@@ -71,6 +71,7 @@ test-suite unittest
                        LambdaCalculus.SimplyTyped.HindleyMilner.TypesSpec
                        LambdaCalculus.SimplyTyped.HindleyMilnerSpec
                        LambdaCalculus.TermSpec
+                       LensLawSpec
   build-depends:       lambda-calculus, base
                      , QuickCheck
                      , containers
