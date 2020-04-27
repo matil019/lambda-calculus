@@ -30,7 +30,7 @@ module LambdaCalculus.SimplyTyped.DeBruijn
     substitute, reduceBeta, reduceStep, reduceSteps
   , -- ** Church encodings
     encodeChurchNumber, interpretChurchNumber, _churchNumber
-  , interpretChurchPair
+  , interpretChurchPair, _churchPair
   ) where
 
 import Control.DeepSeq (NFData)
@@ -38,9 +38,11 @@ import Control.Lens
   ( Index
   , IxValue
   , Ixed
+  , Iso'
   , Prism
   , Prism'
   , Traversal'
+  , iso
   , ix
   , preview
   , prism'
@@ -241,3 +243,10 @@ interpretChurchPair m =
   ( App m (Abs (Abs (Var 2)))
   , App m (Abs (Abs (Var 1)))
   )
+
+-- | An iso which encodes a pair of terms to a Church pair and decodes back.
+--
+-- TODO test to make sure this is really an iso (I believe a few 'reduceBeta'
+-- are needed)
+_churchPair :: Iso' Term (Term, Term)
+_churchPair = iso interpretChurchPair $ \(m, n) -> (App (App (Abs $ Var 1) m) n)
