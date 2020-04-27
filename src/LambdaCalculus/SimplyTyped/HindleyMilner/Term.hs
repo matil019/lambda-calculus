@@ -17,6 +17,7 @@ import LambdaCalculus.SimplyTyped.HindleyMilner.Types (MonoType, formatMonoType)
 import LambdaCalculus.Utils (isSimpleIdent)
 
 import qualified Data.List.NonEmpty as NE
+import qualified Test.QuickCheck as Q
 
 -- | A lambda term with typed constants in De Bruijn index notation.
 --
@@ -27,7 +28,7 @@ data Term
   | Abs Term               -- ^ An abstraction
   | App Term Term          -- ^ An application
   | Const MonoType String  -- ^ A constant
-  deriving (Eq, Generic, NFData, Show)
+  deriving (Eq, Generic, NFData, Q.CoArbitrary, Q.Function, Show)
 
 -- | Traverses sub-terms in depth-first, pre-order.
 --

@@ -72,7 +72,7 @@ import LambdaCalculus.SimplyTyped.HindleyMilner.Types
   , topMono
   )
 import Numeric.Natural (Natural)
-import Test.QuickCheck (Arbitrary, Gen)
+import Test.QuickCheck (Arbitrary, CoArbitrary, Gen)
 
 import qualified Data.Conduit.Combinators as C
 import qualified LambdaCalculus.Genetic
@@ -133,7 +133,7 @@ class TypeSet a where
 --
 -- The phantom type controls instances of 'Arbitrary'. See 'TypeSet'.
 newtype ClosedTerm a = ClosedTerm { unClosedTerm :: Term }
-  deriving (Eq, Generic, NFData, Show)
+  deriving (CoArbitrary, Eq, Generic, NFData, Q.Function, Show)
 
 instance TypeSet a => Arbitrary (ClosedTerm a) where
   arbitrary = genClosedTerm (candidateConsts (Proxy :: Proxy a))

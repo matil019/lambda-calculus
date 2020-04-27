@@ -9,6 +9,8 @@ import Control.Lens (Lens', Plated, Prism', plate, prism')
 import GHC.Generics (Generic)
 import LambdaCalculus.Utils (isSimpleIdent)
 
+import qualified Test.QuickCheck as Q
+
 -- | A type variable representation.
 type VarType = String
 
@@ -17,7 +19,7 @@ data MonoType
   = VarType VarType        -- ^ A type variable
   | ConstType String       -- ^ A constant type
   | MonoType :-> MonoType  -- ^ A function type
-  deriving (Eq, Generic, NFData, Show)
+  deriving (Eq, Generic, NFData, Q.CoArbitrary, Q.Function, Show)
 infixr 1 :->
 
 instance Plated MonoType where
