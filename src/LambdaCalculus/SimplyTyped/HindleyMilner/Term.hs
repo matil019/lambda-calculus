@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -9,7 +10,7 @@
 module LambdaCalculus.SimplyTyped.HindleyMilner.Term where
 
 import Control.DeepSeq (NFData)
-import Control.Lens (Index, IxValue, Ixed, Plated, Traversal, Traversal', ix, plate, preview)
+import Control.Lens (Index, IxValue, Ixed, Plated, Prism', Traversal, Traversal', ix, plate, preview, prism')
 import Data.List.NonEmpty (NonEmpty((:|)))
 import GHC.Generics (Generic)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types (MonoType, formatMonoType)
@@ -49,6 +50,26 @@ instance Plated Term where
   plate f (Abs m)       = Abs <$> f m
   plate f (App m n)     = App <$> f m <*> f n
   plate _ m@(Const _ _) = pure m
+
+_Var :: Prism' Term Int
+_Var = prism' Var $ \case
+  Var x -> Just x
+  _ -> Nothing
+
+_Abs :: Prism' Term Term
+_Abs = prism' Abs $ \case
+  Abs m -> Just m
+  _ -> Nothing
+
+_App :: Prism' Term (Term, Term)
+_App = prism' (uncurry App) $ \case
+  App m n -> Just (m, n)
+  _ -> Nothing
+
+_Const :: Prism' Term (MonoType, String)
+_Const = prism' (uncurry Const) $ \case
+  Const t a -> Just (t, a)
+  _ -> Nothing
 
 -- | A term with additional info about its enclosing term.
 data BoundTerm = BoundTerm

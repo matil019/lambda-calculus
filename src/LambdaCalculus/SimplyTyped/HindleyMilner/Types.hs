@@ -1,10 +1,11 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
 -- | Types which represent types in Hindley-Milner type system.
 module LambdaCalculus.SimplyTyped.HindleyMilner.Types where
 
 import Control.DeepSeq (NFData)
-import Control.Lens (Lens', Plated, plate)
+import Control.Lens (Lens', Plated, Prism', plate, prism')
 import GHC.Generics (Generic)
 import LambdaCalculus.Utils (isSimpleIdent)
 
@@ -24,6 +25,21 @@ instance Plated MonoType where
   plate _ t@(ConstType _) = pure t
   plate f (t :-> t')      = (:->) <$> f t <*> f t'
 
+_VarType :: Prism' MonoType VarType
+_VarType = prism' VarType $ \case
+  VarType x -> Just x
+  _ -> Nothing
+
+_ConstType :: Prism' MonoType String
+_ConstType = prism' ConstType $ \case
+  ConstType x -> Just x
+  _ -> Nothing
+
+_FuncType :: Prism' MonoType (MonoType, MonoType)
+_FuncType = prism' (uncurry (:->)) $ \case
+  t :-> t' -> Just (t, t')
+  _ -> Nothing
+
 -- | Formats a 'MonoType' into a human-readable string.
 formatMonoType :: MonoType -> String
 formatMonoType (VarType x)   = if isSimpleIdent x then x else show x
@@ -41,6 +57,16 @@ data PolyType
   = Mono MonoType            -- ^ A mono type with no bound type variables.
   | ForAll VarType PolyType  -- ^ A variable binder and a type.
   deriving (Eq, Generic, NFData, Show)
+
+_Mono :: Prism' PolyType MonoType
+_Mono = prism' Mono $ \case
+  Mono t -> Just t
+  _ -> Nothing
+
+_ForAll :: Prism' PolyType (VarType, PolyType)
+_ForAll = prism' (uncurry ForAll) $ \case
+  ForAll a s -> Just (a, s)
+  _ -> Nothing
 
 -- | A lens to the outermost 'MonoType' in a 'PolyType'.
 --
