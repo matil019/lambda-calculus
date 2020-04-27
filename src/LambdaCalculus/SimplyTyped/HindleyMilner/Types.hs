@@ -58,6 +58,7 @@ data PolyType
   | ForAll VarType PolyType  -- ^ A variable binder and a type.
   deriving (Eq, Generic, NFData, Show)
 
+-- TODO describe the difference between 'topMono'
 _Mono :: Prism' PolyType MonoType
 _Mono = prism' Mono $ \case
   Mono t -> Just t

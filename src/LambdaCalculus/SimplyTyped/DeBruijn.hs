@@ -8,9 +8,12 @@
 -- | Simply-typed terms in De Bruijn index notation and some high-level stuff.
 module LambdaCalculus.SimplyTyped.DeBruijn
   ( -- * Types
-    VarType, MonoType(..), formatMonoType, parseMonoType, PolyType(..)
+    VarType, MonoType(..), _VarType, _ConstType, _FuncType
+  , formatMonoType, parseMonoType
+  , PolyType(..), _Mono, _ForAll
+  , topMono, boundVars
   , -- * Terms
-    Term(..)
+    Term(..), _Var, _Abs, _App, _Const
   , -- ** Basic operations
     formatTerm, parseTerm, countTerm, isClosed
   , -- ** Accessors and lists
@@ -57,7 +60,14 @@ import LambdaCalculus.SimplyTyped.HindleyMilner.Types
   ( MonoType((:->), ConstType, VarType)
   , PolyType(ForAll, Mono)
   , VarType
+  , _ConstType
+  , _ForAll
+  , _FuncType
+  , _Mono
+  , _VarType
+  , boundVars
   , formatMonoType
+  , topMono
   )
 import Numeric.Natural (Natural)
 import Test.QuickCheck (Arbitrary, Gen)
