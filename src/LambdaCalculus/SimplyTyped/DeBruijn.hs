@@ -26,11 +26,23 @@ module LambdaCalculus.SimplyTyped.DeBruijn
     -- | These functions do /not/ consider types, because substitution is independent of typing.
     substitute, reduceBeta, reduceStep, reduceSteps
   , -- ** Church encodings
-    encodeChurchNumber, interpretChurchNumber, interpretChurchPair
+    encodeChurchNumber, interpretChurchNumber, _churchNumber
+  , interpretChurchPair
   ) where
 
 import Control.DeepSeq (NFData)
-import Control.Lens (Index, IxValue, Ixed, Prism, Traversal', ix, preview, prism', set)
+import Control.Lens
+  ( Index
+  , IxValue
+  , Ixed
+  , Prism
+  , Prism'
+  , Traversal'
+  , ix
+  , preview
+  , prism'
+  , set
+  )
 import Data.Conduit (ConduitT)
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(Proxy))
@@ -154,6 +166,8 @@ closedTerm m | isClosed m = Just (ClosedTerm m)
 closedTerm _ = Nothing
 
 -- | A prism version of 'closedTerm'.
+--
+-- TODO test to make sure this is really a prism
 _closedTerm :: Prism Term Term (ClosedTerm a) (ClosedTerm b)
 _closedTerm = prism' unClosedTerm closedTerm
 
@@ -202,6 +216,12 @@ interpretChurchNumber = \m ->
 -- | Encodes a natural number into a Church numeral.
 encodeChurchNumber :: Natural -> Term
 encodeChurchNumber n = Abs $ Abs $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
+
+-- | A prism which encodes a natural number to a Church numeral and decodes back.
+--
+-- TODO test to make sure this is really a prism
+_churchNumber :: Prism' Term Natural
+_churchNumber = prism' encodeChurchNumber interpretChurchNumber
 
 -- | Interprets a lambda term as a Church pair.
 --
