@@ -27,12 +27,13 @@ module LambdaCalculus.SimplyTyped.DeBruijn
     genTerm, genModifiedTerm, genClosedTerm
   , -- ** Reductions
     -- | These functions do /not/ consider types, because substitution is independent of typing.
-    substitute, reduceBeta, reduceStep, reduceSteps
+    substitute, reduceBeta, reduceEta, reduceEtaShallow, reduceStep, reduceSteps
   , -- ** Church encodings
     encodeChurchNumber, interpretChurchNumber, _churchNumber
   , interpretChurchPair, _churchPair
   ) where
 
+import Control.Applicative ((<|>))
 import Control.DeepSeq (NFData)
 import Control.Lens
   ( Index
@@ -42,6 +43,8 @@ import Control.Lens
   , Prism
   , Prism'
   , Traversal'
+  , cosmos
+  , elemOf
   , iso
   , ix
   , preview
@@ -199,6 +202,23 @@ substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> subst
 reduceBeta :: Term -> Term
 reduceBeta (App (Abs m) n) = substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
 reduceBeta m = m
+
+-- | Performs an eta-reduction on the outermost abstraction.
+--
+-- > reduceEtaShallow (Abs $ App m (Var 1)) == substitute [_, Var 1, Var 2, ..] m
+-- >   if m doesn't contain Var 1
+reduceEtaShallow :: Term -> Maybe Term
+reduceEtaShallow (Abs (App m (Var 1)))
+  -- TODO compare performance against @(Var 1) `elem` toList m@ (bench)
+  | elemOf cosmos (Var 1) m = Just $ substitute (InfList.cons undefined $ fmap Var $ InfList.enumFrom 1) m
+reduceEtaShallow _ = Nothing
+
+-- | Performs an eta-reduction on the innermost nested abstraction.
+--
+-- > reduceEta (Abs $ Abs $ App (Var 2) (Var 1)) == Abs $ Var 1
+reduceEta :: Term -> Maybe Term
+reduceEta (Abs m) = reduceEtaShallow (Abs m) <|> (Abs <$> reduceEta m)
+reduceEta _ = Nothing
 
 -- | @reduceStep m@ tries to reduce a beta-redex one step.
 --
