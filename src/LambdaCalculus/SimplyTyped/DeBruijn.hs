@@ -183,8 +183,6 @@ closedTerm m | isClosed m = Just (ClosedTerm m)
 closedTerm _ = Nothing
 
 -- | A prism version of 'closedTerm'.
---
--- TODO test to make sure this is really a prism
 _closedTerm :: Prism Term Term (ClosedTerm a) (ClosedTerm b)
 _closedTerm = prism' unClosedTerm closedTerm
 
@@ -241,20 +239,29 @@ reduceSteps = C.unfold (fmap dupe . reduceStep)
 
 -- | Interprets a lambda term as a Church numeral. The term must be fully reduced. (TODO add a newtype)
 interpretChurchNumber :: Term -> Maybe Natural
-interpretChurchNumber =
-  go <=< reduceBeta . flip App (Var 1) <=< reduceBeta . flip App (Var 2)
+interpretChurchNumber m0 =
+  go <=< reduceBeta . flip App (Var vzero) <=< reduceBeta . flip App (Var vplus) $ m0
   where
-  go (Var 1) = Just 0
-  go (App (Var 2) n) = fmap (1+) $ go n
+  go (Var x) | x == vzero = Just 0
+  go (App (Var x) n) | x == vplus = fmap (1+) $ go n
   go _ = Nothing
+
+  -- use @maximum free variable index + 1@ to avoid conflict in case the term is
+  -- open
+  vzero = succ $ maxFreeVar 0 m0
+  vplus = succ vzero
+
+  -- finds the maximum index of the free variable in a term
+  maxFreeVar bound (Var x) = x - bound
+  maxFreeVar bound (Abs m) = maxFreeVar (bound+1) m
+  maxFreeVar bound (App m n) = max (maxFreeVar bound m) (maxFreeVar bound n)
+  maxFreeVar _ (Const _ _) = 0
 
 -- | Encodes a natural number into a Church numeral.
 encodeChurchNumber :: Natural -> Term
 encodeChurchNumber n = Abs $ Abs $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
 
 -- | A prism which encodes a natural number to a Church numeral and decodes back.
---
--- TODO test to make sure this is really a prism
 _churchNumber :: Prism' Term Natural
 _churchNumber = prism' encodeChurchNumber interpretChurchNumber
 
