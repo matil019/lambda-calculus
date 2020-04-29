@@ -5,11 +5,13 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 -- | Lambda terms in the ordinary notation.
 module LambdaCalculus.Term(module LambdaCalculus.Term.Types, module LambdaCalculus.Term) where
 
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal', ix)
+import Control.Monad ((<=<))
 import Data.Conduit (ConduitT)
 import Data.List (find)
 import Data.Set (Set)
@@ -161,17 +163,17 @@ substitute x n (Abs y m)
 -- | Performs beta-reduction.
 --
 -- Automatically does alpha-conversions if needed.
-reduceBeta :: Term -> Term
-reduceBeta (App (Abs x m) n) = substitute x n m
-reduceBeta m = m
+reduceBeta :: Term -> Maybe Term
+reduceBeta (App (Abs x m) n) = Just $ substitute x n m
+reduceBeta _ = Nothing
 
 -- | @reduceStep m@ tries to reduce a beta-redex one step.
 --
 -- If @m@ can't be reduced any more, returns @Nothing@.
 reduceStep :: Term -> Maybe Term
 reduceStep (Var _) = Nothing
+reduceStep (reduceBeta -> Just m) = Just m
 reduceStep (Abs x m) = Abs x <$> reduceStep m
-reduceStep m@(App (Abs _ _) _) = Just $ reduceBeta m
 reduceStep (App m n) = case reduceStep m of
   Just m' -> Just $ App m' n
   Nothing -> App m <$> reduceStep n
@@ -182,8 +184,8 @@ reduceSteps = C.unfold (fmap dupe . reduceStep)
 
 -- | Interprets a lambda term as a Church numeral. The term must be fully reduced.
 interpretChurchNumber :: Term -> Maybe Natural
-interpretChurchNumber = \m ->
-  go $ reduceBeta $ App (reduceBeta (App m (Var "+"))) (Var "0")
+interpretChurchNumber =
+  go <=< reduceBeta . flip App (Var "0") <=< reduceBeta . flip App (Var "+")
   where
   go (Var "0") = Just 0
   go (App (Var "+") n) = fmap (1+) $ go n

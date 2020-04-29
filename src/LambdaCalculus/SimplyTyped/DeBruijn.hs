@@ -5,6 +5,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 -- | Simply-typed terms in De Bruijn index notation and some high-level stuff.
 module LambdaCalculus.SimplyTyped.DeBruijn
   ( -- * Types
@@ -51,6 +52,7 @@ import Control.Lens
   , prism'
   , set
   )
+import Control.Monad ((<=<))
 import Data.Conduit (ConduitT)
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(Proxy))
@@ -199,9 +201,9 @@ substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> subst
   shift = substitute (fmap Var $ InfList.enumFrom 2)
 
 -- | Performs a beta-reduction.
-reduceBeta :: Term -> Term
-reduceBeta (App (Abs m) n) = substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
-reduceBeta m = m
+reduceBeta :: Term -> Maybe Term
+reduceBeta (App (Abs m) n) = Just $ substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
+reduceBeta _ = Nothing
 
 -- | Performs an eta-reduction on the outermost abstraction.
 --
@@ -226,8 +228,9 @@ reduceEta _ = Nothing
 reduceStep :: Term -> Maybe Term
 reduceStep (Const _ _) = Nothing
 reduceStep (Var _) = Nothing
+reduceStep (reduceBeta -> Just m) = Just m
+reduceStep (reduceEta -> Just m) = Just m
 reduceStep (Abs m) = Abs <$> reduceStep m
-reduceStep m@(App (Abs _) _) = Just $ reduceBeta m
 reduceStep (App m n) = case reduceStep m of
   Just m' -> Just $ App m' n
   Nothing -> App m <$> reduceStep n
@@ -238,8 +241,8 @@ reduceSteps = C.unfold (fmap dupe . reduceStep)
 
 -- | Interprets a lambda term as a Church numeral. The term must be fully reduced. (TODO add a newtype)
 interpretChurchNumber :: Term -> Maybe Natural
-interpretChurchNumber = \m ->
-  go $ reduceBeta $ App (reduceBeta (App m (Var 2))) (Var 1)
+interpretChurchNumber =
+  go <=< reduceBeta . flip App (Var 1) <=< reduceBeta . flip App (Var 2)
   where
   go (Var 1) = Just 0
   go (App (Var 2) n) = fmap (1+) $ go n
