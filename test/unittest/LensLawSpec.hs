@@ -3,7 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module LensLawSpec where
 
-import Control.Lens (Lens', Traversal', set, view)
+import Control.Lens (Iso', Lens', Prism', Traversal', matching, preview, review, set, view)
 import Data.Functor.Compose (Compose(Compose), getCompose)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types.Instances ()
 import Test.Hspec
@@ -39,3 +39,39 @@ lensLawSpec l = do
     set l v' (set l v s) `shouldBe` set l v' s
 
   traversalLawSpec l
+
+prismLawSpec
+  :: (Arbitrary s, Eq s, Show s, Arbitrary a, CoArbitrary a, Eq a, Function a, Show a)
+  => Prism' s a
+  -> Spec
+prismLawSpec l = do
+  prismLawOnlySpec l
+
+  traversalLawSpec l
+
+-- | Like 'prismLawSpec', but doesn't call 'traversalLawSpec'.
+prismLawOnlySpec
+  :: (Arbitrary s, Eq s, Show s, Arbitrary a, Eq a, Show a)
+  => Prism' s a
+  -> Spec
+prismLawOnlySpec l = do
+  prop "preview l (review l b) == Just b" $ \b ->
+    preview l (review l b) `shouldBe` Just b
+
+  prop "preview l s == Just a ==> review l a == s" $ \s ->
+    case preview l s of
+      Just a -> review l a `shouldBe` s
+      Nothing -> pure ()
+
+  prop "matching l s == Left t ==> matching l t == Left s" $ \s ->
+    case matching l s of
+      Left t -> matching l t `shouldBe` Left s
+      Right _ -> pure () -- using @discard@ causes the test to fail if an @Iso@ was given
+
+isoLawSpec
+  :: (Arbitrary s, Eq s, Show s, Arbitrary a, CoArbitrary a, Eq a, Function a, Show a)
+  => Iso' s a
+  -> Spec
+isoLawSpec f = do
+  lensLawSpec f
+  prismLawOnlySpec f
