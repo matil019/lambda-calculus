@@ -60,6 +60,3 @@ spec = do
 
   describe "_churchNumber" $ do
     prismLawSpec _churchNumber
-
-  describe "_churchPair" $ do
-    isoLawSpec _churchPair
