@@ -30,8 +30,7 @@ module LambdaCalculus.SimplyTyped.DeBruijn
     -- | These functions do /not/ consider types, because substitution is independent of typing.
     substitute, reduceBeta, reduceEta, reduceEtaShallow, reduceStep, reduceSteps
   , -- ** Church encodings
-    encodeChurchNumber, interpretChurchNumber
-  , interpretChurchPair
+    encodeChurchNumber, interpretChurchNumber, interpretChurchPair
   ) where
 
 import Control.Applicative ((<|>))
