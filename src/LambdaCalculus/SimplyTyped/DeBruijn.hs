@@ -51,6 +51,7 @@ import Control.Lens
 import Control.Monad ((<=<))
 import Data.Conduit (ConduitT)
 import Data.Maybe (fromMaybe)
+import Data.Monoid (Any(Any), getAny)
 import Data.Proxy (Proxy(Proxy))
 import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
@@ -205,12 +206,9 @@ reduceBeta _ = Nothing
 -- >   if m doesn't reference the (from the point of m) free variable #1
 reduceEtaShallow :: Term -> Maybe Term
 reduceEtaShallow (Abs (App m (Var 1)))
-  | not $ refers1 0 m = Just $ substitute (InfList.cons undefined $ fmap Var $ InfList.enumFrom 1) m
+  | not $ refers1 m = Just $ substitute (InfList.cons undefined $ fmap Var $ InfList.enumFrom 1) m
   where
-  refers1 bound (Var x) = x - bound == 1
-  refers1 bound (Abs m') = refers1 (bound+1) m'
-  refers1 bound (App m' n') = refers1 bound m' || refers1 bound n'
-  refers1 _ (Const _ _) = False
+  refers1 = getAny . foldVars (\bound x -> Any $ x - bound == 1)
 reduceEtaShallow _ = Nothing
 
 -- | Performs an eta-reduction on the innermost nested abstraction.
@@ -220,7 +218,7 @@ reduceEta :: Term -> Maybe Term
 reduceEta (Abs m) = reduceEtaShallow (Abs m) <|> (Abs <$> reduceEta m)
 reduceEta _ = Nothing
 
--- | @reduceStep m@ tries to reduce a beta-redex one step.
+-- | @reduceStep m@ tries to reduce a redex one step.
 --
 -- If @m@ can't be reduced any more, returns @Nothing@.
 reduceStep :: Term -> Maybe Term
