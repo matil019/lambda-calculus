@@ -53,6 +53,7 @@ import Data.Conduit (ConduitT)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Any(Any), getAny)
 import Data.Proxy (Proxy(Proxy))
+import Data.Semigroup (Max(Max), getMax)
 import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
 import LambdaCalculus.Genetic (Genetic, genCrossover)
@@ -244,16 +245,12 @@ interpretChurchNumber m0 =
   go (App (Var x) n) | x == vplus = fmap (1+) $ go n
   go _ = Nothing
 
-  -- use @maximum free variable index + 1@ to avoid conflict in case the term is
-  -- open
-  vzero = succ $ maxFreeVar 0 m0
+  -- use @maximum free variable index + 1@ to avoid conflict in case the term is open
+  vzero = succ $ maxFreeVar m0
   vplus = succ vzero
 
   -- finds the maximum index of the free variable in a term
-  maxFreeVar bound (Var x) = x - bound
-  maxFreeVar bound (Abs m) = maxFreeVar (bound+1) m
-  maxFreeVar bound (App m n) = max (maxFreeVar bound m) (maxFreeVar bound n)
-  maxFreeVar _ (Const _ _) = 0
+  maxFreeVar = getMax . foldMapVars (Max 0) Max (\bound x -> x - bound)
 
 -- | Encodes a natural number into a Church numeral.
 encodeChurchNumber :: Natural -> Term
