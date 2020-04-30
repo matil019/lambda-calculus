@@ -48,7 +48,6 @@ import Control.Lens
   , prism'
   , set
   )
-import Control.Monad ((<=<))
 import Data.Conduit (ConduitT)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Any(Any), getAny)
@@ -239,11 +238,13 @@ reduceSteps = C.unfold (fmap dupe . reduceStep)
 -- | Interprets a lambda term as a Church numeral. The term must be fully reduced. (TODO add a newtype)
 interpretChurchNumber :: Term -> Maybe Natural
 interpretChurchNumber m0 =
-  go <=< reduceBeta . flip App (Var vzero) <=< reduceBeta . flip App (Var vplus) $ m0
+  go $ reduceBeta' $ App (reduceBeta' $ App m0 (Var vplus)) (Var vzero)
   where
   go (Var x) | x == vzero = Just 0
   go (App (Var x) n) | x == vplus = fmap (1+) $ go n
   go _ = Nothing
+
+  reduceBeta' m = fromMaybe m (reduceBeta m)
 
   -- use @maximum free variable index + 1@ to avoid conflict in case the term is open
   vzero = succ $ maxFreeVar m0

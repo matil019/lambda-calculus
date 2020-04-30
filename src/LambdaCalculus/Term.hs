@@ -11,9 +11,9 @@ module LambdaCalculus.Term(module LambdaCalculus.Term.Types, module LambdaCalcul
 
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Traversal', ix)
-import Control.Monad ((<=<))
 import Data.Conduit (ConduitT)
 import Data.List (find)
+import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
@@ -184,12 +184,14 @@ reduceSteps = C.unfold (fmap dupe . reduceStep)
 
 -- | Interprets a lambda term as a Church numeral. The term must be fully reduced.
 interpretChurchNumber :: Term -> Maybe Natural
-interpretChurchNumber =
-  go <=< reduceBeta . flip App (Var "0") <=< reduceBeta . flip App (Var "+")
+interpretChurchNumber = \m ->
+  go $ reduceBeta' $ App (reduceBeta' $ App m (Var "+")) (Var "0")
   where
   go (Var "0") = Just 0
   go (App (Var "+") n) = fmap (1+) $ go n
   go _ = Nothing
+
+  reduceBeta' m = fromMaybe m (reduceBeta m)
 
 {-# DEPRECATED genChurchNumber "Use encodeChurchNumber" #-}
 -- |
