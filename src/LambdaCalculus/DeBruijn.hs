@@ -268,7 +268,7 @@ substitute :: InfList Term -> Term -> Term
 substitute = coerce Typed.substitute
 
 -- | Performs a beta-reduction.
-reduceBeta :: Term -> Term
+reduceBeta :: Term -> Maybe Term
 reduceBeta = coerce Typed.reduceBeta
 
 -- | @reduceStep m@ tries to reduce a beta-redex one step.

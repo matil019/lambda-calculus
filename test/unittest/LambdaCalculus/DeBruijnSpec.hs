@@ -62,10 +62,10 @@ spec = do
 
     describe "reduceBeta" $ do
       prop "arbitrary Term.BetaReducibleTerm" $ \(Term.BetaReducibleTerm (_, m)) ->
-        case m of
-          Term.App (Term.Abs _ _) _ ->
-            let (free, m') = toDeBruijn mempty m
-            in fromDeBruijn free (reduceBeta m') `shouldSatisfy` (`Term.alphaEqv` Term.reduceBeta m)
+        let (free, mdb) = toDeBruijn mempty m
+        in
+        case (reduceBeta mdb, Term.reduceBeta m) of
+          (Just mdb', Just m') -> fromDeBruijn free mdb' `shouldSatisfy` (`Term.alphaEqv` m')
           _ -> Q.discard
 
   describe "instance Genetic ClosedTerm" $ do

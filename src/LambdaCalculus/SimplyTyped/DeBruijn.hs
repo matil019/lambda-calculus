@@ -5,34 +5,52 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 -- | Simply-typed terms in De Bruijn index notation and some high-level stuff.
 module LambdaCalculus.SimplyTyped.DeBruijn
   ( -- * Types
-    VarType, MonoType(..), formatMonoType, parseMonoType, PolyType(..)
+    VarType, MonoType(..), _VarType, _ConstType, _FuncType
+  , formatMonoType, parseMonoType
+  , PolyType(..), _Mono, _ForAll
+  , topMono, boundVars
   , -- * Terms
-    Term(..)
+    Term(..), _Var, _Abs, _App, _Const
   , -- ** Basic operations
-    formatTerm, parseTerm, countTerm, isClosed
+    formatTerm, parseTerm, countTerm, isClosed, foldVars, foldMapVars
   , -- ** Accessors and lists
     linear, toList, index, ixBound, BoundTerm(..)
   , -- ** Type inference
     infer, check, quantify
   , -- ** Closed terms
-    ClosedTerm(..), TypeSet(..)
+    ClosedTerm(..), TypeSet(..), closedTerm, _closedTerm
   , -- ** Generating terms
+    -- | Generated terms may or may not be well-typed.
     genTerm, genModifiedTerm, genClosedTerm
   , -- ** Reductions
     -- | These functions do /not/ consider types, because substitution is independent of typing.
-    substitute, reduceBeta, reduceStep, reduceSteps
+    substitute, reduceBeta, reduceEta, reduceEtaShallow, reduceStep, reduceSteps
   , -- ** Church encodings
     encodeChurchNumber, interpretChurchNumber, interpretChurchPair
   ) where
 
+import Control.Applicative ((<|>))
 import Control.DeepSeq (NFData)
-import Control.Lens (Index, IxValue, Ixed, Traversal', ix, preview, set)
+import Control.Lens
+  ( Index
+  , IxValue
+  , Ixed
+  , Prism
+  , Traversal'
+  , ix
+  , preview
+  , prism'
+  , set
+  )
 import Data.Conduit (ConduitT)
 import Data.Maybe (fromMaybe)
+import Data.Monoid (Any(Any), getAny)
 import Data.Proxy (Proxy(Proxy))
+import Data.Semigroup (Max(Max), getMax)
 import Data.Tuple.Extra (dupe)
 import GHC.Generics (Generic)
 import LambdaCalculus.Genetic (Genetic, genCrossover)
@@ -44,17 +62,25 @@ import LambdaCalculus.SimplyTyped.HindleyMilner.Types
   ( MonoType((:->), ConstType, VarType)
   , PolyType(ForAll, Mono)
   , VarType
+  , _ConstType
+  , _ForAll
+  , _FuncType
+  , _Mono
+  , _VarType
+  , boundVars
   , formatMonoType
+  , topMono
   )
 import Numeric.Natural (Natural)
-import Test.QuickCheck (Arbitrary, Gen)
+import Test.QuickCheck (Arbitrary, CoArbitrary, Gen)
 
 import qualified Data.Conduit.Combinators as C
 import qualified LambdaCalculus.Genetic
 import qualified LambdaCalculus.InfList as InfList
 import qualified Test.QuickCheck as Q
 
--- | Generates a 'Term' with a specified number of free variables and a set of constants.
+-- | Generates a 'Term' with a specified number of free variables and a set of
+-- constants.
 --
 -- The size parameter of 'Gen' is used as an average of a number of sub-terms
 -- in a term. Note that there is no upper limit of a size of a generated term;
@@ -95,8 +121,8 @@ genModifiedTerm constants freeNum m = do
   flip (ixBound i) m $ \BoundTerm{boundNum} -> genTerm constants $ boundNum + freeNum
 
 -- | Generates a closed 'Term'.
-genClosedTerm :: [(MonoType, String)] -> Gen Term
-genClosedTerm constants = genTerm constants 0
+genClosedTerm :: [(MonoType, String)] -> Gen (ClosedTerm a)
+genClosedTerm constants = ClosedTerm <$> genTerm constants 0
 
 -- | A class for phantom types to control instances of 'Arbitrary'.
 class TypeSet a where
@@ -107,10 +133,10 @@ class TypeSet a where
 --
 -- The phantom type controls instances of 'Arbitrary'. See 'TypeSet'.
 newtype ClosedTerm a = ClosedTerm { unClosedTerm :: Term }
-  deriving (Eq, Generic, NFData, Show)
+  deriving (CoArbitrary, Eq, Generic, NFData, Q.Function, Show)
 
 instance TypeSet a => Arbitrary (ClosedTerm a) where
-  arbitrary = ClosedTerm <$> genClosedTerm (candidateConsts (Proxy :: Proxy a))
+  arbitrary = genClosedTerm (candidateConsts (Proxy :: Proxy a))
 
 instance Ixed (ClosedTerm a) where
   ix :: Int -> Traversal' (ClosedTerm a) Term
@@ -145,6 +171,16 @@ instance TypeSet a => Genetic (ClosedTerm a) where
     . genModifiedTerm (candidateConsts (Proxy :: Proxy a)) 0
     . unClosedTerm
 
+-- | A smart constructor of 'ClosedTerm' which checks whether a 'Term' is
+-- closed, and converts it into a 'ClosedTerm' if it is the case.
+closedTerm :: Term -> Maybe (ClosedTerm a)
+closedTerm m | isClosed m = Just (ClosedTerm m)
+closedTerm _ = Nothing
+
+-- | A prism version of 'closedTerm'.
+_closedTerm :: Prism Term Term (ClosedTerm a) (ClosedTerm b)
+_closedTerm = prism' unClosedTerm closedTerm
+
 -- | Performs a substitution.
 --
 -- You would like to use 'reduceBeta' instead of using this directly.
@@ -158,18 +194,38 @@ substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> subst
   shift = substitute (fmap Var $ InfList.enumFrom 2)
 
 -- | Performs a beta-reduction.
-reduceBeta :: Term -> Term
-reduceBeta (App (Abs m) n) = substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
-reduceBeta m = m
+reduceBeta :: Term -> Maybe Term
+reduceBeta (App (Abs m) n) = Just $ substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
+reduceBeta _ = Nothing
 
--- | @reduceStep m@ tries to reduce a beta-redex one step.
+-- | Performs an eta-reduction on the outermost abstraction.
+--
+-- > reduceEtaShallow (Abs $ App m (Var 1)) == substitute [_, Var 1, Var 2, ..] m
+-- >   if m doesn't reference the (from the point of m) free variable #1
+reduceEtaShallow :: Term -> Maybe Term
+reduceEtaShallow (Abs (App m (Var 1)))
+  | not $ refers1 m = Just $ substitute (InfList.cons undefined $ fmap Var $ InfList.enumFrom 1) m
+  where
+  refers1 = getAny . foldVars (\bound x -> Any $ x - bound == 1)
+reduceEtaShallow _ = Nothing
+
+-- | Performs an eta-reduction on the innermost nested abstraction.
+--
+-- > reduceEta (Abs $ Abs $ App (Var 2) (Var 1)) == Abs $ Var 1
+reduceEta :: Term -> Maybe Term
+reduceEta (Abs m) = reduceEtaShallow (Abs m) <|> (Abs <$> reduceEta m)
+reduceEta _ = Nothing
+
+-- | @reduceStep m@ tries to reduce a redex one step.
 --
 -- If @m@ can't be reduced any more, returns @Nothing@.
 reduceStep :: Term -> Maybe Term
 reduceStep (Const _ _) = Nothing
 reduceStep (Var _) = Nothing
+reduceStep (reduceBeta -> Just m) = Just m
+-- eta-reduction here changes the outcome of the main program, for some reason (TODO investigate why)
+-- reduceStep (reduceEta -> Just m) = Just m
 reduceStep (Abs m) = Abs <$> reduceStep m
-reduceStep m@(App (Abs _) _) = Just $ reduceBeta m
 reduceStep (App m n) = case reduceStep m of
   Just m' -> Just $ App m' n
   Nothing -> App m <$> reduceStep n
@@ -180,12 +236,21 @@ reduceSteps = C.unfold (fmap dupe . reduceStep)
 
 -- | Interprets a lambda term as a Church numeral. The term must be fully reduced. (TODO add a newtype)
 interpretChurchNumber :: Term -> Maybe Natural
-interpretChurchNumber = \m ->
-  go $ reduceBeta $ App (reduceBeta (App m (Var 2))) (Var 1)
+interpretChurchNumber m0 =
+  go $ reduceBeta' $ App (reduceBeta' $ App m0 (Var vplus)) (Var vzero)
   where
-  go (Var 1) = Just 0
-  go (App (Var 2) n) = fmap (1+) $ go n
+  go (Var x) | x == vzero = Just 0
+  go (App (Var x) n) | x == vplus = fmap (1+) $ go n
   go _ = Nothing
+
+  reduceBeta' m = fromMaybe m (reduceBeta m)
+
+  -- use @maximum free variable index + 1@ to avoid conflict in case the term is open
+  vzero = succ $ maxFreeVar m0
+  vplus = succ vzero
+
+  -- finds the maximum index of the free variable in a term
+  maxFreeVar = getMax . foldMapVars (Max 0) Max (\bound x -> x - bound)
 
 -- | Encodes a natural number into a Church numeral.
 encodeChurchNumber :: Natural -> Term

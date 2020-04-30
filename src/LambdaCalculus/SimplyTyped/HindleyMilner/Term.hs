@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -9,13 +10,15 @@
 module LambdaCalculus.SimplyTyped.HindleyMilner.Term where
 
 import Control.DeepSeq (NFData)
-import Control.Lens (Index, IxValue, Ixed, Plated, Traversal, Traversal', ix, plate, preview)
+import Control.Lens (Index, IxValue, Ixed, Plated, Prism', Traversal, Traversal', ix, plate, preview, prism')
 import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.Monoid (All(All), getAll)
 import GHC.Generics (Generic)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types (MonoType, formatMonoType)
 import LambdaCalculus.Utils (isSimpleIdent)
 
 import qualified Data.List.NonEmpty as NE
+import qualified Test.QuickCheck as Q
 
 -- | A lambda term with typed constants in De Bruijn index notation.
 --
@@ -26,7 +29,7 @@ data Term
   | Abs Term               -- ^ An abstraction
   | App Term Term          -- ^ An application
   | Const MonoType String  -- ^ A constant
-  deriving (Eq, Generic, NFData, Show)
+  deriving (Eq, Generic, NFData, Q.CoArbitrary, Q.Function, Show)
 
 -- | Traverses sub-terms in depth-first, pre-order.
 --
@@ -49,6 +52,30 @@ instance Plated Term where
   plate f (Abs m)       = Abs <$> f m
   plate f (App m n)     = App <$> f m <*> f n
   plate _ m@(Const _ _) = pure m
+
+-- | A prism that targets 'Var'.
+_Var :: Prism' Term Int
+_Var = prism' Var $ \case
+  Var x -> Just x
+  _ -> Nothing
+
+-- | A prism that targets 'Abs'.
+_Abs :: Prism' Term Term
+_Abs = prism' Abs $ \case
+  Abs m -> Just m
+  _ -> Nothing
+
+-- | A prism that targets 'App'.
+_App :: Prism' Term (Term, Term)
+_App = prism' (uncurry App) $ \case
+  App m n -> Just (m, n)
+  _ -> Nothing
+
+-- | A prism that targets 'Const'.
+_Const :: Prism' Term (MonoType, String)
+_Const = prism' (uncurry Const) $ \case
+  Const t a -> Just (t, a)
+  _ -> Nothing
 
 -- | A term with additional info about its enclosing term.
 data BoundTerm = BoundTerm
@@ -102,12 +129,30 @@ countTerm (App m n) = 1 + countTerm m + countTerm n
 --
 -- Constants are not considered as free variables.
 isClosed :: Term -> Bool
-isClosed = go 0
+isClosed = getAll . foldVars (\bound x -> All $ x <= bound)
+
+-- | Folds over 'Var's in a term.
+foldVars
+  :: Monoid m
+  => (Int -> Int -> m)  -- ^ args: the number of 'Abs' containing a 'Var' and the content of the 'Var'.
+  -> Term
+  -> m
+foldVars = foldMapVars mempty id
+
+-- | Folds over 'Var's in a term with a custom conversion to a monoid.
+foldMapVars
+  :: Semigroup m
+  => m                  -- ^ an "mempty"; used for 'Const's
+  -> (a -> m)           -- ^ a convertion to a monoid
+  -> (Int -> Int -> a)  -- ^ args: the number of 'Abs' containing a 'Var' and the content of the 'Var'.
+  -> Term
+  -> m
+foldMapVars empty am f = go 0
   where
-  go !bound (Var x) = x <= bound
-  go !bound (Abs m) = go (bound+1) m
-  go !bound (App m n) = go bound m && go bound n
-  go _ (Const _ _) = True
+  go bound (Var x) = am $ f bound x
+  go bound (Abs m) = go (bound+1) m
+  go bound (App m n) = go bound m <> go bound n
+  go _ (Const _ _) = empty
 
 -- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
 -- traversed in depth-first, pre-order.
