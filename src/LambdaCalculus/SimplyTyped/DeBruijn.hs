@@ -43,8 +43,6 @@ import Control.Lens
   , Prism
   , Prism'
   , Traversal'
-  , cosmos
-  , elemOf
   , ix
   , preview
   , prism'
@@ -204,11 +202,15 @@ reduceBeta _ = Nothing
 -- | Performs an eta-reduction on the outermost abstraction.
 --
 -- > reduceEtaShallow (Abs $ App m (Var 1)) == substitute [_, Var 1, Var 2, ..] m
--- >   if m doesn't contain Var 1
+-- >   if m doesn't reference the (from the point of m) free variable #1
 reduceEtaShallow :: Term -> Maybe Term
 reduceEtaShallow (Abs (App m (Var 1)))
-  -- TODO compare performance against @(Var 1) `elem` toList m@ (bench)
-  | elemOf cosmos (Var 1) m = Just $ substitute (InfList.cons undefined $ fmap Var $ InfList.enumFrom 1) m
+  | not $ refers1 0 m = Just $ substitute (InfList.cons undefined $ fmap Var $ InfList.enumFrom 1) m
+  where
+  refers1 bound (Var x) = x - bound == 1
+  refers1 bound (Abs m') = refers1 (bound+1) m'
+  refers1 bound (App m' n') = refers1 bound m' || refers1 bound n'
+  refers1 _ (Const _ _) = False
 reduceEtaShallow _ = Nothing
 
 -- | Performs an eta-reduction on the innermost nested abstraction.
