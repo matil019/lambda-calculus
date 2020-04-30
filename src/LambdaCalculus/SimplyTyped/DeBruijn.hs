@@ -223,7 +223,8 @@ reduceStep :: Term -> Maybe Term
 reduceStep (Const _ _) = Nothing
 reduceStep (Var _) = Nothing
 reduceStep (reduceBeta -> Just m) = Just m
-reduceStep (reduceEta -> Just m) = Just m
+-- eta-reduction here changes the outcome of the main program, for some reason (TODO investigate why)
+-- reduceStep (reduceEta -> Just m) = Just m
 reduceStep (Abs m) = Abs <$> reduceStep m
 reduceStep (App m n) = case reduceStep m of
   Just m' -> Just $ App m' n
