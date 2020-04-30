@@ -16,7 +16,7 @@ module LambdaCalculus.SimplyTyped.DeBruijn
   , -- * Terms
     Term(..), _Var, _Abs, _App, _Const
   , -- ** Basic operations
-    formatTerm, parseTerm, countTerm, isClosed
+    formatTerm, parseTerm, countTerm, isClosed, foldVars
   , -- ** Accessors and lists
     linear, toList, index, ixBound, BoundTerm(..)
   , -- ** Type inference

@@ -12,6 +12,7 @@ module LambdaCalculus.SimplyTyped.HindleyMilner.Term where
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Plated, Prism', Traversal, Traversal', ix, plate, preview, prism')
 import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.Monoid (All(All), getAll)
 import GHC.Generics (Generic)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types (MonoType, formatMonoType)
 import LambdaCalculus.Utils (isSimpleIdent)
@@ -128,12 +129,20 @@ countTerm (App m n) = 1 + countTerm m + countTerm n
 --
 -- Constants are not considered as free variables.
 isClosed :: Term -> Bool
-isClosed = go 0
+isClosed = getAll . foldVars (\bound x -> All $ x <= bound)
+
+-- | Folds over 'Var's in a term.
+foldVars
+  :: Monoid m
+  => (Int -> Int -> m)  -- ^ args: the number of 'Abs' containing a 'Var' and the content of the 'Var'.
+  -> Term
+  -> m
+foldVars f = go 0
   where
-  go !bound (Var x) = x <= bound
-  go !bound (Abs m) = go (bound+1) m
-  go !bound (App m n) = go bound m && go bound n
-  go _ (Const _ _) = True
+  go bound (Var x) = f bound x
+  go bound (Abs m) = go (bound+1) m
+  go bound (App m n) = go bound m <> go bound n
+  go _ (Const _ _) = mempty
 
 -- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
 -- traversed in depth-first, pre-order.
