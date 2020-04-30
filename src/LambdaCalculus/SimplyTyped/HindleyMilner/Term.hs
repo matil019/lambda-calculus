@@ -137,12 +137,22 @@ foldVars
   => (Int -> Int -> m)  -- ^ args: the number of 'Abs' containing a 'Var' and the content of the 'Var'.
   -> Term
   -> m
-foldVars f = go 0
+foldVars = foldMapVars mempty id
+
+-- | Folds over 'Var's in a term with a custom conversion to a monoid.
+foldMapVars
+  :: Semigroup m
+  => m                  -- ^ an "mempty"; used for 'Const's
+  -> (a -> m)           -- ^ a convertion to a monoid
+  -> (Int -> Int -> a)  -- ^ args: the number of 'Abs' containing a 'Var' and the content of the 'Var'.
+  -> Term
+  -> m
+foldMapVars empty am f = go 0
   where
-  go bound (Var x) = f bound x
+  go bound (Var x) = am $ f bound x
   go bound (Abs m) = go (bound+1) m
   go bound (App m n) = go bound m <> go bound n
-  go _ (Const _ _) = mempty
+  go _ (Const _ _) = empty
 
 -- | @linear m@ is a non-empty list whose elements are the sub-terms of @m@
 -- traversed in depth-first, pre-order.
