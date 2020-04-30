@@ -52,21 +52,25 @@ instance Plated Term where
   plate f (App m n)     = App <$> f m <*> f n
   plate _ m@(Const _ _) = pure m
 
+-- | A prism that targets 'Var'.
 _Var :: Prism' Term Int
 _Var = prism' Var $ \case
   Var x -> Just x
   _ -> Nothing
 
+-- | A prism that targets 'Abs'.
 _Abs :: Prism' Term Term
 _Abs = prism' Abs $ \case
   Abs m -> Just m
   _ -> Nothing
 
+-- | A prism that targets 'App'.
 _App :: Prism' Term (Term, Term)
 _App = prism' (uncurry App) $ \case
   App m n -> Just (m, n)
   _ -> Nothing
 
+-- | A prism that targets 'Const'.
 _Const :: Prism' Term (MonoType, String)
 _Const = prism' (uncurry Const) $ \case
   Const t a -> Just (t, a)

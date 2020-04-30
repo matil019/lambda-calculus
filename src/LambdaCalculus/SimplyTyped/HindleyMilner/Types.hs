@@ -27,16 +27,19 @@ instance Plated MonoType where
   plate _ t@(ConstType _) = pure t
   plate f (t :-> t')      = (:->) <$> f t <*> f t'
 
+-- | A prism that targets the value of v'VarType'.
 _VarType :: Prism' MonoType VarType
 _VarType = prism' VarType $ \case
   VarType x -> Just x
   _ -> Nothing
 
+-- | A prism that targets the value of 'ConstType'.
 _ConstType :: Prism' MonoType String
 _ConstType = prism' ConstType $ \case
   ConstType x -> Just x
   _ -> Nothing
 
+-- | A prism that targets the operands of '(:->)'.
 _FuncType :: Prism' MonoType (MonoType, MonoType)
 _FuncType = prism' (uncurry (:->)) $ \case
   t :-> t' -> Just (t, t')
@@ -60,12 +63,15 @@ data PolyType
   | ForAll VarType PolyType  -- ^ A variable binder and a type.
   deriving (Eq, Generic, NFData, Show)
 
--- TODO describe the difference between 'topMono'
+-- | A prism that targets the value of 'Mono'.
+--
+-- See also 'topMono'.
 _Mono :: Prism' PolyType MonoType
 _Mono = prism' Mono $ \case
   Mono t -> Just t
   _ -> Nothing
 
+-- | A prism that targets the value of 'ForAll'.
 _ForAll :: Prism' PolyType (VarType, PolyType)
 _ForAll = prism' (uncurry ForAll) $ \case
   ForAll a s -> Just (a, s)
@@ -75,6 +81,16 @@ _ForAll = prism' (uncurry ForAll) $ \case
 --
 -- Intended to be combined with 'Control.Lens.universeOn', etc. to make use of
 -- the @instance 'Plated' 'MonoType'@ with a 'PolyType'.
+--
+-- This is different from '_Mono'. 'topMono' targets a 'Mono' possibly wrapped
+-- inside 'ForAll'(s), whereas '_Mono' targets the outermost 'Mono' constructor.
+-- So
+--
+-- > preview topMono (Mono t) ≡ Just t
+-- > preview _Mono   (Mono t) ≡ Just t
+--
+-- > preview topMono (ForAll a (Mono t)) ≡ Just t
+-- > preview _Mono   (ForAll a (Mono t)) ≡ Nothing
 topMono :: Lens' PolyType MonoType
 topMono f (Mono t) = Mono <$> f t
 topMono f (ForAll a s) = ForAll a <$> topMono f s
