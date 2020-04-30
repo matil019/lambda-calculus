@@ -36,7 +36,3 @@ spec = do
   describe "_closedTerm" $ do
     describe "should follow the prism law" $
       prismLawSpec (_closedTerm :: Prism' Term (ClosedTerm SomeTypeSet))
-
-  describe "_churchNumber" $ do
-    describe "should follow the prism law" $
-      prismLawSpec _churchNumber

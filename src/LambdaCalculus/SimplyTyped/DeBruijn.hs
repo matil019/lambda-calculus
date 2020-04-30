@@ -30,7 +30,7 @@ module LambdaCalculus.SimplyTyped.DeBruijn
     -- | These functions do /not/ consider types, because substitution is independent of typing.
     substitute, reduceBeta, reduceEta, reduceEtaShallow, reduceStep, reduceSteps
   , -- ** Church encodings
-    encodeChurchNumber, interpretChurchNumber, _churchNumber
+    encodeChurchNumber, interpretChurchNumber
   , interpretChurchPair
   ) where
 
@@ -41,7 +41,6 @@ import Control.Lens
   , IxValue
   , Ixed
   , Prism
-  , Prism'
   , Traversal'
   , ix
   , preview
@@ -256,10 +255,6 @@ interpretChurchNumber m0 =
 -- | Encodes a natural number into a Church numeral.
 encodeChurchNumber :: Natural -> Term
 encodeChurchNumber n = Abs $ Abs $ iterate (App (Var 2)) (Var 1) !! fromIntegral n
-
--- | A prism which encodes a natural number to a Church numeral and decodes back.
-_churchNumber :: Prism' Term Natural
-_churchNumber = prism' encodeChurchNumber interpretChurchNumber
 
 -- | Interprets a lambda term as a Church pair.
 --
