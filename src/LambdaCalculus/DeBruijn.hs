@@ -216,13 +216,13 @@ ixBound = \i f -> fmap coerce . Typed.ixBound i (fmap coerce . f . untypedBoundT
 --
 -- @genTerm 0@ always generates a closed term in a form of an @('Abs' _)@.
 genTerm :: Int -> Gen Term
-genTerm = coerce $ Typed.genTerm []
+genTerm = coerce $ Typed.genTerm (pure Nothing)
 
 -- | Generates a modified 'Term'.
 --
 -- Picks a random sub-term and replaces it with a fresh one.
 genModifiedTerm :: Int -> Term -> Gen Term
-genModifiedTerm = coerce $ Typed.genModifiedTerm []
+genModifiedTerm = coerce $ Typed.genModifiedTerm (pure Nothing)
 
 -- | A null data type for use with 'Typed.TypeSet'
 data NoConstants
@@ -230,7 +230,7 @@ data NoConstants
 -- | @'Typed.candidateConsts' _ = []@ because untyped terms are equivalent with typed terms
 -- in which constants never appear.
 instance Typed.TypeSet NoConstants where
-  candidateConsts _ = []
+  genCandidateConst _ = pure Nothing
 
 -- | A closed lambda term. This assumption allows more type instances to be defined.
 newtype ClosedTerm = ClosedTerm (Typed.ClosedTerm NoConstants)
@@ -238,7 +238,7 @@ newtype ClosedTerm = ClosedTerm (Typed.ClosedTerm NoConstants)
   deriving newtype (Eq, NFData)
 
 instance Arbitrary ClosedTerm where
-  arbitrary = fmap ClosedTerm $ coerce $ Typed.genClosedTerm []
+  arbitrary = fmap ClosedTerm $ coerce $ Typed.genClosedTerm (pure Nothing)
 
 instance Ixed ClosedTerm where
   ix :: Int -> Traversal' ClosedTerm Term

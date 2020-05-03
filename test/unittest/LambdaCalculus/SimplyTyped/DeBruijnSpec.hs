@@ -9,10 +9,13 @@ import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck.Instances.Natural ()
 
+import qualified Test.QuickCheck as Q
+
 data SomeTypeSet
 
 instance TypeSet SomeTypeSet where
-  candidateConsts _ = [(VarType "i", "i"), (ConstType "a", "a"), (VarType "x" :-> VarType "y", "xy")]
+  -- TODO use @fmap Just arbitrary@ instead?
+  genCandidateConst _ = fmap Just $ Q.elements [(VarType "i", "i"), (ConstType "a", "a"), (VarType "x" :-> VarType "y", "xy")]
 
 spec :: Spec
 spec = do

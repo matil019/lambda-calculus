@@ -79,55 +79,57 @@ import qualified LambdaCalculus.Genetic
 import qualified LambdaCalculus.InfList as InfList
 import qualified Test.QuickCheck as Q
 
--- | Generates a 'Term' with a specified number of free variables and a set of
--- constants.
+-- | Generates a 'Term' with a specified number of free variables and a
+-- generator of constants.
 --
 -- The size parameter of 'Gen' is used as an average of a number of sub-terms
 -- in a term. Note that there is no upper limit of a size of a generated term;
 -- although rare, a huge term may be generated.
 --
--- @genTerm 0@ always generates a closed term in a form of an @('Abs' _)@.
+-- @genTerm _ 0@ always generates a closed term in a form of an @('Abs' _)@.
+--
 -- TODO Allow @Const@
-genTerm :: [(MonoType, String)] -> Int -> Gen Term
-genTerm constants freeNum = do
+genTerm :: Gen (Maybe (MonoType, String)) -> Int -> Gen Term
+genTerm genConst' freeNum = do
   -- see LambdaCalculus.Term.genTerm for explanation of the probability
   size <- max 1 <$> Q.getSize
-  case () of
+  mconst <- genConst
+  case mconst of
     _ | freeNum < 1 -> genAbs
-      | null constants -> do
+    Nothing -> do
           let p = 10000 * (size + 2) `div` (3 * size)
               q = (10000 - p) `div` 2
           Q.frequency [(p, genVar), (q, genAbs), (q, genApp)]
-      | otherwise -> do
+    Just c -> do
           let p = 10000 * (size + 2) `div` (6 * size)
               q = (10000 - 2 * p) `div` 2
-          Q.frequency [(p, genConst), (p, genVar), (q, genAbs), (q, genApp)]
+          Q.frequency [(p, pure c), (p, genVar), (q, genAbs), (q, genApp)]
   where
   -- 1 term
-  genConst = uncurry Const <$> Q.elements constants
+  genConst = fmap (fmap (uncurry Const)) genConst'
   -- 1 term
   genVar = Var <$> Q.choose (1, freeNum)
   -- X + 1 terms
-  genAbs = Abs <$> genTerm constants (freeNum+1)
+  genAbs = Abs <$> genTerm genConst' (freeNum+1)
   -- 2X + 1 terms
-  genApp = App <$> genTerm constants freeNum <*> genTerm constants freeNum
+  genApp = App <$> genTerm genConst' freeNum <*> genTerm genConst' freeNum
 
 -- | Generates a modified 'Term'.
 --
 -- Picks a random sub-term and replaces it with a fresh one.
-genModifiedTerm :: [(MonoType, String)] -> Int -> Term -> Gen Term
-genModifiedTerm constants freeNum m = do
+genModifiedTerm :: Gen (Maybe (MonoType, String)) -> Int -> Term -> Gen Term
+genModifiedTerm genConst freeNum m = do
   i <- Q.choose (0, countTerm m - 1)
-  flip (ixBound i) m $ \BoundTerm{boundNum} -> genTerm constants $ boundNum + freeNum
+  flip (ixBound i) m $ \BoundTerm{boundNum} -> genTerm genConst $ boundNum + freeNum
 
 -- | Generates a closed 'Term'.
-genClosedTerm :: [(MonoType, String)] -> Gen (ClosedTerm a)
-genClosedTerm constants = ClosedTerm <$> genTerm constants 0
+genClosedTerm :: Gen (Maybe (MonoType, String)) -> Gen (ClosedTerm a)
+genClosedTerm genConst = ClosedTerm <$> genTerm genConst 0
 
 -- | A class for phantom types to control instances of 'Arbitrary'.
 class TypeSet a where
   -- | A set of constants which may be included in an arbitrary @'ClosedTerm' a@.
-  candidateConsts :: proxy a -> [(MonoType, String)]
+  genCandidateConst :: proxy a -> Gen (Maybe (MonoType, String))
 
 -- | A closed lambda term. This assumption allows more type instances to be defined.
 --
@@ -136,7 +138,7 @@ newtype ClosedTerm a = ClosedTerm { unClosedTerm :: Term }
   deriving (CoArbitrary, Eq, Generic, NFData, Q.Function, Show)
 
 instance TypeSet a => Arbitrary (ClosedTerm a) where
-  arbitrary = genClosedTerm (candidateConsts (Proxy :: Proxy a))
+  arbitrary = genClosedTerm (genCandidateConst (Proxy :: Proxy a))
 
 instance Ixed (ClosedTerm a) where
   ix :: Int -> Traversal' (ClosedTerm a) Term
@@ -168,7 +170,7 @@ instance TypeSet a => Genetic (ClosedTerm a) where
     swappable m n = boundNum m == boundNum n
 
   genMutant = fmap ClosedTerm
-    . genModifiedTerm (candidateConsts (Proxy :: Proxy a)) 0
+    . genModifiedTerm (genCandidateConst (Proxy :: Proxy a)) 0
     . unClosedTerm
 
 -- | A smart constructor of 'ClosedTerm' which checks whether a 'Term' is

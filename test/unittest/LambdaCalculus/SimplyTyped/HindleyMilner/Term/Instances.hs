@@ -9,6 +9,6 @@ import qualified Test.QuickCheck as Q
 
 instance Arbitrary Term where
   arbitrary = do
-    constants <- arbitrary
+    let constants = fmap Just arbitrary
     Q.NonNegative (Q.Small freeNum) <- arbitrary
     genTerm constants freeNum

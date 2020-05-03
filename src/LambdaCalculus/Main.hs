@@ -28,10 +28,10 @@ import LambdaCalculus.SimplyTyped.DeBruijn
   ( ClosedTerm
   , Term(App)
   , TypeSet
-  , candidateConsts
   , countTerm
   , encodeChurchNumber
   , formatTerm
+  , genCandidateConst
   , interpretChurchNumber
   , interpretChurchPair
   , reduceSteps
@@ -135,7 +135,7 @@ resultScore (Result xs) = sum $ flip map xs
 data LikeUntyped
 
 instance TypeSet LikeUntyped where
-  candidateConsts _ = []
+  genCandidateConst _ = pure Nothing
 
 -- | An event in a progress of running Genetic Algorithm.
 data Event
