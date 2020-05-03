@@ -12,3 +12,8 @@ instance Arbitrary Term where
     let constants = fmap Just arbitrary
     Q.NonNegative (Q.Small freeNum) <- arbitrary
     genTerm constants freeNum
+
+instance Arbitrary ClosedTerm where
+  arbitrary = do
+    let constants = fmap Just arbitrary
+    genClosedTerm constants

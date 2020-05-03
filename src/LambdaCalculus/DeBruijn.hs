@@ -25,7 +25,7 @@ module LambdaCalculus.DeBruijn
   , -- ** Accessors and lists
     linear, toList, index, ixBound, BoundTerm(..)
   , -- ** Closed terms
-    ClosedTerm(..), NoConstants, unClosedTerm, toClosedTermUnchecked
+    ClosedTerm(..), unClosedTerm, toClosedTermUnchecked
   , -- ** Generating terms
     genTerm, genModifiedTerm
   , -- ** Reductions
@@ -233,7 +233,7 @@ instance Typed.TypeSet NoConstants where
   genCandidateConst _ = pure Nothing
 
 -- | A closed lambda term. This assumption allows more type instances to be defined.
-newtype ClosedTerm = ClosedTerm (Typed.ClosedTerm NoConstants)
+newtype ClosedTerm = ClosedTerm Typed.ClosedTerm
   deriving stock (Generic, Show)
   deriving newtype (Eq, NFData)
 
@@ -248,8 +248,13 @@ type instance Index ClosedTerm = Int
 type instance IxValue ClosedTerm = Term
 
 instance Genetic ClosedTerm where
-  genCrossover (ClosedTerm parent1, ClosedTerm parent2) = coerce (genCrossover (parent1, parent2))
-  genMutant (ClosedTerm parent) = coerce (genMutant parent)
+  genCrossover (parent1, parent2) =
+    coerce $ genCrossover
+      ( coerce parent1 :: Typed.GeneticTerm NoConstants
+      , coerce parent2 :: Typed.GeneticTerm NoConstants
+      )
+  genMutant parent =
+    coerce $ genMutant (coerce parent :: Typed.GeneticTerm NoConstants)
 
 -- | Converts back from 'ClosedTerm' to 'Term'.
 unClosedTerm :: ClosedTerm -> Term

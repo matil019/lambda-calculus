@@ -9,13 +9,6 @@ import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck.Instances.Natural ()
 
-import qualified Test.QuickCheck as Q
-
-data AnyTypeSet
-
-instance TypeSet AnyTypeSet where
-  genCandidateConst _ = fmap Just Q.arbitrary
-
 spec :: Spec
 spec = do
   describe "interpretChurchNumber" $ do
@@ -37,4 +30,4 @@ spec = do
 
   describe "_closedTerm" $ do
     describe "should follow the prism law" $
-      prismLawSpec (_closedTerm :: Prism' Term (ClosedTerm AnyTypeSet))
+      prismLawSpec (_closedTerm :: Prism' Term ClosedTerm)
