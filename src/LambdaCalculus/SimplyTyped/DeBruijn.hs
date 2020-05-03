@@ -160,6 +160,13 @@ class TypeSet a where
 newtype GeneticTerm a = GeneticTerm { unGeneticTerm :: ClosedTerm }
   deriving (CoArbitrary, Eq, Generic, NFData, Q.Function, Show)
 
+instance Ixed (GeneticTerm a) where
+  ix :: Int -> Traversal' (GeneticTerm a) Term
+  ix i f = fmap (GeneticTerm . ClosedTerm) . ix i f . runGeneticTerm
+
+type instance Index (GeneticTerm a) = Int
+type instance IxValue (GeneticTerm a) = Term
+
 instance TypeSet a => Arbitrary (GeneticTerm a) where
   arbitrary = GeneticTerm <$> genClosedTerm (genCandidateConst (Proxy :: Proxy a))
 
