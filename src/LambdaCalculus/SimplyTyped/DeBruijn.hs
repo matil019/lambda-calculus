@@ -22,7 +22,9 @@ module LambdaCalculus.SimplyTyped.DeBruijn
   , -- ** Type inference
     infer, check, quantify
   , -- ** Closed terms
-    ClosedTerm(..), TypeSet(..), closedTerm, _closedTerm
+    ClosedTerm(..), closedTerm, _closedTerm
+  , -- ** Closed terms with the 'Genetic' class
+    TypeSet(..), GeneticTerm(..), runGeneticTerm
   , -- ** Generating terms
     -- | Generated terms may or may not be well-typed.
     genTerm, genModifiedTerm, genClosedTerm
@@ -39,7 +41,7 @@ import Control.Lens
   ( Index
   , IxValue
   , Ixed
-  , Prism
+  , Prism'
   , Traversal'
   , ix
   , preview
@@ -79,75 +81,98 @@ import qualified LambdaCalculus.Genetic
 import qualified LambdaCalculus.InfList as InfList
 import qualified Test.QuickCheck as Q
 
--- | Generates a 'Term' with a specified number of free variables and a set of
--- constants.
+-- | Generates a 'Term' with a specified number of free variables and a
+-- generator of constants.
 --
 -- The size parameter of 'Gen' is used as an average of a number of sub-terms
 -- in a term. Note that there is no upper limit of a size of a generated term;
 -- although rare, a huge term may be generated.
 --
--- @genTerm 0@ always generates a closed term in a form of an @('Abs' _)@.
+-- @genTerm _ 0@ always generates a closed term in a form of an @('Abs' _)@.
+--
 -- TODO Allow @Const@
-genTerm :: [(MonoType, String)] -> Int -> Gen Term
-genTerm constants freeNum = do
+genTerm :: Gen (Maybe (MonoType, String)) -> Int -> Gen Term
+genTerm genConst' freeNum = do
   -- see LambdaCalculus.Term.genTerm for explanation of the probability
   size <- max 1 <$> Q.getSize
-  case () of
+  mconst <- genConst
+  case mconst of
     _ | freeNum < 1 -> genAbs
-      | null constants -> do
+    Nothing -> do
           let p = 10000 * (size + 2) `div` (3 * size)
               q = (10000 - p) `div` 2
           Q.frequency [(p, genVar), (q, genAbs), (q, genApp)]
-      | otherwise -> do
+    Just c -> do
           let p = 10000 * (size + 2) `div` (6 * size)
               q = (10000 - 2 * p) `div` 2
-          Q.frequency [(p, genConst), (p, genVar), (q, genAbs), (q, genApp)]
+          Q.frequency [(p, pure c), (p, genVar), (q, genAbs), (q, genApp)]
   where
   -- 1 term
-  genConst = uncurry Const <$> Q.elements constants
+  genConst = fmap (fmap (uncurry Const)) genConst'
   -- 1 term
   genVar = Var <$> Q.choose (1, freeNum)
   -- X + 1 terms
-  genAbs = Abs <$> genTerm constants (freeNum+1)
+  genAbs = Abs <$> genTerm genConst' (freeNum+1)
   -- 2X + 1 terms
-  genApp = App <$> genTerm constants freeNum <*> genTerm constants freeNum
+  genApp = App <$> genTerm genConst' freeNum <*> genTerm genConst' freeNum
 
 -- | Generates a modified 'Term'.
 --
 -- Picks a random sub-term and replaces it with a fresh one.
-genModifiedTerm :: [(MonoType, String)] -> Int -> Term -> Gen Term
-genModifiedTerm constants freeNum m = do
+genModifiedTerm :: Gen (Maybe (MonoType, String)) -> Int -> Term -> Gen Term
+genModifiedTerm genConst freeNum m = do
   i <- Q.choose (0, countTerm m - 1)
-  flip (ixBound i) m $ \BoundTerm{boundNum} -> genTerm constants $ boundNum + freeNum
+  flip (ixBound i) m $ \BoundTerm{boundNum} -> genTerm genConst $ boundNum + freeNum
 
 -- | Generates a closed 'Term'.
-genClosedTerm :: [(MonoType, String)] -> Gen (ClosedTerm a)
-genClosedTerm constants = ClosedTerm <$> genTerm constants 0
+genClosedTerm :: Gen (Maybe (MonoType, String)) -> Gen ClosedTerm
+genClosedTerm genConst = ClosedTerm <$> genTerm genConst 0
+
+-- | A closed lambda term. This assumption allows more type instances to be defined.
+newtype ClosedTerm = ClosedTerm { unClosedTerm :: Term }
+  deriving (CoArbitrary, Eq, Generic, NFData, Q.Function, Show)
+
+instance Ixed ClosedTerm where
+  ix :: Int -> Traversal' ClosedTerm Term
+  ix i f = fmap ClosedTerm . ix i f . unClosedTerm
+
+type instance Index ClosedTerm = Int
+type instance IxValue ClosedTerm = Term
+
+-- | A smart constructor of 'ClosedTerm' which checks whether a 'Term' is
+-- closed, and converts it into a 'ClosedTerm' if it is the case.
+closedTerm :: Term -> Maybe ClosedTerm
+closedTerm m | isClosed m = Just (ClosedTerm m)
+closedTerm _ = Nothing
+
+-- | A prism version of 'closedTerm'.
+_closedTerm :: Prism' Term ClosedTerm
+_closedTerm = prism' unClosedTerm closedTerm
 
 -- | A class for phantom types to control instances of 'Arbitrary'.
 class TypeSet a where
   -- | A set of constants which may be included in an arbitrary @'ClosedTerm' a@.
-  candidateConsts :: proxy a -> [(MonoType, String)]
+  genCandidateConst :: proxy a -> Gen (Maybe (MonoType, String))
 
--- | A closed lambda term. This assumption allows more type instances to be defined.
+-- | A closed term for use with 'Genetic'.
 --
 -- The phantom type controls instances of 'Arbitrary'. See 'TypeSet'.
-newtype ClosedTerm a = ClosedTerm { unClosedTerm :: Term }
+newtype GeneticTerm a = GeneticTerm { unGeneticTerm :: ClosedTerm }
   deriving (CoArbitrary, Eq, Generic, NFData, Q.Function, Show)
 
-instance TypeSet a => Arbitrary (ClosedTerm a) where
-  arbitrary = genClosedTerm (candidateConsts (Proxy :: Proxy a))
+instance Ixed (GeneticTerm a) where
+  ix :: Int -> Traversal' (GeneticTerm a) Term
+  ix i f = fmap (GeneticTerm . ClosedTerm) . ix i f . runGeneticTerm
 
-instance Ixed (ClosedTerm a) where
-  ix :: Int -> Traversal' (ClosedTerm a) Term
-  ix i f = fmap ClosedTerm . ix i f . unClosedTerm
+type instance Index (GeneticTerm a) = Int
+type instance IxValue (GeneticTerm a) = Term
 
-type instance Index (ClosedTerm a) = Int
-type instance IxValue (ClosedTerm a) = Term
+instance TypeSet a => Arbitrary (GeneticTerm a) where
+  arbitrary = GeneticTerm <$> genClosedTerm (genCandidateConst (Proxy :: Proxy a))
 
-instance TypeSet a => Genetic (ClosedTerm a) where
+instance TypeSet a => Genetic (GeneticTerm a) where
   -- TODO always generate well-typed terms?
-  genCrossover p12@(ClosedTerm parent1, ClosedTerm parent2) = do
+  genCrossover p12@(runGeneticTerm -> parent1, runGeneticTerm -> parent2) = do
     i1 <- Q.choose (0, countTerm parent1 - 1)
     i2 <- Q.choose (0, countTerm parent2 - 1)
     let sub1 = preview (ixBound' i1) parent1
@@ -156,7 +181,7 @@ instance TypeSet a => Genetic (ClosedTerm a) where
         child2 = maybe id (set (ix i2) . boundTerm) sub1 $ parent2
     -- retry if not swappable TODO implement without retrying
     if fromMaybe False $ swappable <$> sub1 <*> sub2
-      then pure (ClosedTerm child1, ClosedTerm child2)
+      then pure (GeneticTerm $ ClosedTerm child1, GeneticTerm $ ClosedTerm child2)
       else genCrossover p12
     where
     ixBound' :: Int -> Traversal' Term BoundTerm
@@ -167,19 +192,13 @@ instance TypeSet a => Genetic (ClosedTerm a) where
     swappable :: BoundTerm -> BoundTerm -> Bool
     swappable m n = boundNum m == boundNum n
 
-  genMutant = fmap ClosedTerm
-    . genModifiedTerm (candidateConsts (Proxy :: Proxy a)) 0
-    . unClosedTerm
+  genMutant = fmap (GeneticTerm . ClosedTerm)
+    . genModifiedTerm (genCandidateConst (Proxy :: Proxy a)) 0
+    . runGeneticTerm
 
--- | A smart constructor of 'ClosedTerm' which checks whether a 'Term' is
--- closed, and converts it into a 'ClosedTerm' if it is the case.
-closedTerm :: Term -> Maybe (ClosedTerm a)
-closedTerm m | isClosed m = Just (ClosedTerm m)
-closedTerm _ = Nothing
-
--- | A prism version of 'closedTerm'.
-_closedTerm :: Prism Term Term (ClosedTerm a) (ClosedTerm b)
-_closedTerm = prism' unClosedTerm closedTerm
+-- | Extracts a 'Term' from a 'GeneticTerm'.
+runGeneticTerm :: GeneticTerm a -> Term
+runGeneticTerm = unClosedTerm . unGeneticTerm
 
 -- | Performs a substitution.
 --

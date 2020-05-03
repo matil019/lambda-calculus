@@ -25,17 +25,17 @@ import Data.List.Extra (maximumOn)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Ord (Down(Down))
 import LambdaCalculus.SimplyTyped.DeBruijn
-  ( ClosedTerm
+  ( GeneticTerm
   , Term(App)
   , TypeSet
-  , candidateConsts
   , countTerm
   , encodeChurchNumber
   , formatTerm
+  , genCandidateConst
   , interpretChurchNumber
   , interpretChurchPair
   , reduceSteps
-  , unClosedTerm
+  , runGeneticTerm
   )
 import LambdaCalculus.Genetic (Individual(Individual), newGeneration)
 import Numeric.Natural (Natural)
@@ -135,12 +135,12 @@ resultScore (Result xs) = sum $ flip map xs
 data LikeUntyped
 
 instance TypeSet LikeUntyped where
-  candidateConsts _ = []
+  genCandidateConst _ = pure Nothing
 
 -- | An event in a progress of running Genetic Algorithm.
 data Event
   = RunEvent (Term, Result, Double, Seconds)
-  | GenEvent [(ClosedTerm LikeUntyped, Double)]
+  | GenEvent [(GeneticTerm LikeUntyped, Double)]
 
 -- | The main function.
 main :: IO ()
@@ -173,11 +173,11 @@ main = do
            GenEvent popu -> fmap (maximumOn (\(_, score) -> score) . NE.toList) $ nonEmpty popu
            )
       .| iterPerMC 1000 (\(m, score) -> liftIO $ putStrLn $
-           "current best score: " <> show score <> ", term: " <> formatTerm (unClosedTerm m))
+           "current best score: " <> show score <> ", term: " <> formatTerm (runGeneticTerm m))
       .| C.last
     whenJust best $ \(m, score) -> do
       hPutStrLn stderr $ "final best score: " <> show score
-      hPutStrLn stderr $ formatTerm $ unClosedTerm m
+      hPutStrLn stderr $ formatTerm $ runGeneticTerm m
     whenJustM (readIORef exref) throwIO
   where
   iterPrintEvent :: MonadIO m => ConduitT Event Event m ()
@@ -200,7 +200,7 @@ main = do
           [ ("generation", show genIdx)
           , ("score best", printf "%.03f" $ ne0 maximum $ map (\(_, score) -> score) popu)
           , ("score avg",  printf "%.03f" $ ne0 average $ map (\(_, score) -> score) popu)
-          , ("size avg",   printf "%.03f" $ ne0 average $ map (\(m, _) -> realToFrac $ countTerm $ unClosedTerm m) popu)
+          , ("size avg",   printf "%.03f" $ ne0 average $ map (\(m, _) -> realToFrac $ countTerm $ runGeneticTerm m) popu)
           ]
         C.yield evt
         loop runIdx (genIdx + 1)
@@ -215,13 +215,13 @@ main = do
   geneAlgo = do
     terms <- runGen 30 $ replicateM numPopulation arbitrary
     -- POPUlation
-    popu <- pooledMapConcurrentlyC (\term -> (term,) <$> runMeasureYield term) terms
+    popu <- pooledMapConcurrentlyC (\term -> (term,) <$> runMeasureYield (runGeneticTerm term)) terms
     C.yield $ GenEvent popu
     loop popu
     where
     loop prevPopu = do
       terms <- runGen 30 $ newGeneration $ map (\(m, score) -> Individual m (scoreToWeight score)) prevPopu
-      nextPopu <- pooledMapConcurrentlyC (\term -> (term,) <$> runMeasureYield term) terms
+      nextPopu <- pooledMapConcurrentlyC (\term -> (term,) <$> runMeasureYield (runGeneticTerm term)) terms
       mergedPopu <- runGen 30 $ do
         let bothPopu = sortOn (\(_, score) -> Down score) (nextPopu <> prevPopu)
             numElite = numPopulation `div` 5
@@ -238,13 +238,13 @@ main = do
 
     numPopulation = 1000
 
-    runMeasureYield :: MonadIO m => ClosedTerm a -> ConduitT i Event m Double
+    runMeasureYield :: MonadIO m => Term -> ConduitT i Event m Double
     runMeasureYield m = do
       (time, (result, score)) <- liftIO $ duration $ do
-        let !result = runTerm $ unClosedTerm m
-            !score = realToFrac (resultScore result) - sqrt (realToFrac $ countTerm $ unClosedTerm m) / 10
+        let !result = runTerm m
+            !score = realToFrac (resultScore result) - sqrt (realToFrac $ countTerm m) / 10
         pure $! (result, score)
-      C.yield $ RunEvent (unClosedTerm m, result, score, time)
+      C.yield $ RunEvent (m, result, score, time)
       pure score
 
   runTerm :: Term -> Result

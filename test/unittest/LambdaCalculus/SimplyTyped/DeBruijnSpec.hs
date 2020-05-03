@@ -9,11 +9,6 @@ import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck.Instances.Natural ()
 
-data SomeTypeSet
-
-instance TypeSet SomeTypeSet where
-  candidateConsts _ = [(VarType "i", "i"), (ConstType "a", "a"), (VarType "x" :-> VarType "y", "xy")]
-
 spec :: Spec
 spec = do
   describe "interpretChurchNumber" $ do
@@ -35,4 +30,4 @@ spec = do
 
   describe "_closedTerm" $ do
     describe "should follow the prism law" $
-      prismLawSpec (_closedTerm :: Prism' Term (ClosedTerm SomeTypeSet))
+      prismLawSpec (_closedTerm :: Prism' Term ClosedTerm)
