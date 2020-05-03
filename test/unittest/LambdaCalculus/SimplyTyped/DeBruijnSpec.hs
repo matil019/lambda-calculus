@@ -11,11 +11,10 @@ import Test.QuickCheck.Instances.Natural ()
 
 import qualified Test.QuickCheck as Q
 
-data SomeTypeSet
+data AnyTypeSet
 
-instance TypeSet SomeTypeSet where
-  -- TODO use @fmap Just arbitrary@ instead?
-  genCandidateConst _ = fmap Just $ Q.elements [(VarType "i", "i"), (ConstType "a", "a"), (VarType "x" :-> VarType "y", "xy")]
+instance TypeSet AnyTypeSet where
+  genCandidateConst _ = fmap Just Q.arbitrary
 
 spec :: Spec
 spec = do
@@ -38,4 +37,4 @@ spec = do
 
   describe "_closedTerm" $ do
     describe "should follow the prism law" $
-      prismLawSpec (_closedTerm :: Prism' Term (ClosedTerm SomeTypeSet))
+      prismLawSpec (_closedTerm :: Prism' Term (ClosedTerm AnyTypeSet))
