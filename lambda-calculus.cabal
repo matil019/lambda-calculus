@@ -51,6 +51,17 @@ library
   default-language:    Haskell2010
   ghc-options:         -Wall -fdefer-typed-holes
 
+library instances
+  exposed-modules:     LambdaCalculus.SimplyTyped.HindleyMilner.Instances
+                       LambdaCalculus.SimplyTyped.HindleyMilner.Term.Instances
+                       LambdaCalculus.SimplyTyped.HindleyMilner.Types.Instances
+  -- other-modules:
+  build-depends:       lambda-calculus, base
+                     , QuickCheck
+  hs-source-dirs:      src/instances
+  default-language:    Haskell2010
+  ghc-options:         -Wall -fdefer-typed-holes
+
 executable lambda-calculus
   main-is:             src/lambda-calculus.hs
   -- other-modules:
@@ -65,16 +76,13 @@ test-suite unittest
   main-is:             Main.hs
   other-modules:       LambdaCalculus.DeBruijnSpec
                        LambdaCalculus.SimplyTyped.DeBruijnSpec
-                       LambdaCalculus.SimplyTyped.HindleyMilner.Instances
                        LambdaCalculus.SimplyTyped.HindleyMilner.ParseSpec
-                       LambdaCalculus.SimplyTyped.HindleyMilner.Term.Instances
                        LambdaCalculus.SimplyTyped.HindleyMilner.TermSpec
-                       LambdaCalculus.SimplyTyped.HindleyMilner.Types.Instances
                        LambdaCalculus.SimplyTyped.HindleyMilner.TypesSpec
                        LambdaCalculus.SimplyTyped.HindleyMilnerSpec
                        LambdaCalculus.TermSpec
                        LensLawSpec
-  build-depends:       lambda-calculus, base
+  build-depends:       lambda-calculus, instances, base
                      , QuickCheck
                      , containers
                      , extra
@@ -91,7 +99,7 @@ benchmark termbench
   other-modules:       Bench.Class
                        LambdaCalculus.DeBruijn2
                        LambdaCalculus.SimplyTyped.DeBruijnBench
-  build-depends:       lambda-calculus, base
+  build-depends:       lambda-calculus, instances, base
                      , QuickCheck
                      , conduit
                      , criterion
