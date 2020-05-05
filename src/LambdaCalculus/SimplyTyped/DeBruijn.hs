@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -31,6 +32,7 @@ module LambdaCalculus.SimplyTyped.DeBruijn
   , -- ** Reductions
     -- | These functions do /not/ consider types, because substitution is independent of typing.
     substitute, reduceBeta, reduceEta, reduceEtaShallow, reduceStep, reduceSteps
+  , reduceBeta2
   , -- ** Church encodings
     encodeChurchNumber, interpretChurchNumber, interpretChurchPair
   ) where
@@ -216,6 +218,31 @@ substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> subst
 reduceBeta :: Term -> Maybe Term
 reduceBeta (App (Abs m) n) = Just $ substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
 reduceBeta _ = Nothing
+
+-- | Performs a beta-reduction.
+reduceBeta2 :: Term -> Maybe Term
+reduceBeta2 = \case
+  App (Abs m) n -> Just $ go 0 m n
+  _ -> Nothing
+  where
+  go bound (Var x) n = case compare (bound + 1) x of
+    EQ -> incrementFreeVars bound n
+    LT -> Var (x-1)
+    GT -> Var x
+  go bound (Abs m) n = Abs $ go (bound+1) m n
+  go bound (App m m') n = App (go bound m n) (go bound m' n)
+  go _ m@(Const _ _) _ = m
+
+-- TODO export this? (cf. LambdaCalculus.DeBruijn.Crossover.incrementFreeVars)
+incrementFreeVars :: Int -> Term -> Term
+incrementFreeVars inc = go 0
+  where
+  go bound (Var x)
+    | x > bound = Var (x + inc)
+    | otherwise = Var x
+  go bound (Abs m) = Abs $ go (bound+1) m
+  go bound (App m n) = App (go bound m) (go bound n)
+  go _ m@(Const _ _) = m
 
 -- | Performs an eta-reduction on the outermost abstraction.
 --
