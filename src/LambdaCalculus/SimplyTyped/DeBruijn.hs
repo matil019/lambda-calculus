@@ -29,9 +29,11 @@ module LambdaCalculus.SimplyTyped.DeBruijn
   , -- ** Generating terms
     -- | Generated terms may or may not be well-typed.
     genTerm, genModifiedTerm, genClosedTerm
+  , -- ** Manipulating terms
+    substitute, incrementFreeVars
   , -- ** Reductions
     -- | These functions do /not/ consider types, because substitution is independent of typing.
-    substitute, reduceBeta, reduceEta, reduceEtaShallow, reduceStep, reduceSteps
+    reduceBeta, reduceEta, reduceEtaShallow, reduceStep, reduceSteps
   , -- ** Church encodings
     encodeChurchNumber, interpretChurchNumber, interpretChurchPair
   ) where
@@ -216,6 +218,29 @@ substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> subst
   s' = fmap shift s
   shift = substitute (fmap Var $ InfList.enumFrom 2)
 
+-- | @incrementFreeVars inc m@ increments free variables in @m@ by @inc@.
+--
+-- @inc@ should be positive but it is not checked. See also `decrementFreeVars`.
+--
+-- `incrementFreeVars` is a specialization of `substitute` but may have better
+-- performance.
+--
+-- @
+-- `incrementFreeVars` inc == `substitute` (`InfList.enumFrom` (1 + inc))
+-- @
+--
+-- TODO check this with a unit test
+-- TODO add a bench to make sure `incrementFreeVars` is faster
+incrementFreeVars :: Int -> Term -> Term
+incrementFreeVars inc = go 0
+  where
+  go bound (Var x)
+    | x > bound = Var (x + inc)
+    | otherwise = Var x
+  go bound (Abs m) = Abs $ go (bound+1) m
+  go bound (App m n) = App (go bound m) (go bound n)
+  go _ m@(Const _ _) = m
+
 -- | Performs a beta-reduction.
 reduceBeta :: Term -> Maybe Term
 reduceBeta = \case
@@ -229,17 +254,6 @@ reduceBeta = \case
   go bound (Abs m) n = Abs $ go (bound+1) m n
   go bound (App m m') n = App (go bound m n) (go bound m' n)
   go _ m@(Const _ _) _ = m
-
--- TODO export this? (cf. LambdaCalculus.DeBruijn.Crossover.incrementFreeVars)
-incrementFreeVars :: Int -> Term -> Term
-incrementFreeVars inc = go 0
-  where
-  go bound (Var x)
-    | x > bound = Var (x + inc)
-    | otherwise = Var x
-  go bound (Abs m) = Abs $ go (bound+1) m
-  go bound (App m n) = App (go bound m) (go bound n)
-  go _ m@(Const _ _) = m
 
 -- | Performs an eta-reduction on the outermost abstraction.
 --
