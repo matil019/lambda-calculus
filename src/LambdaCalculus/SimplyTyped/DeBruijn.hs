@@ -203,7 +203,10 @@ runGeneticTerm = unClosedTerm . unGeneticTerm
 
 -- | Performs a substitution.
 --
--- You would like to use 'reduceBeta' instead of using this directly.
+-- Substitutes the free variables in a term with elements in a list in the
+-- order.
+--
+-- The indices of variables are adjusted to preserve the meaning of the term.
 substitute :: InfList Term -> Term -> Term
 substitute _ m@(Const _ _) = m
 substitute s (Var x) = InfList.toList s !! (x-1)
