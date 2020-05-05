@@ -90,6 +90,7 @@ benchmark termbench
   main-is:             Main.hs
   other-modules:       Bench.Class
                        LambdaCalculus.DeBruijn2
+                       LambdaCalculus.SimplyTyped.DeBruijnBench
   build-depends:       lambda-calculus, base
                      , QuickCheck
                      , conduit
@@ -100,4 +101,4 @@ benchmark termbench
                      , transformers
   hs-source-dirs:      bench
   default-language:    Haskell2010
-  ghc-options:         -Wall -fdefer-typed-holes
+  ghc-options:         -Wall -fdefer-typed-holes -rtsopts
