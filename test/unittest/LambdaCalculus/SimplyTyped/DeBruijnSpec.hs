@@ -11,11 +11,6 @@ import Test.QuickCheck.Instances.Natural ()
 
 spec :: Spec
 spec = do
-  describe "reduceBeta" $ do
-    prop "reduceBeta2 == reduceBeta" $ \m n -> do
-      let redex = App (Abs m) n
-      reduceBeta2 redex `shouldBe` reduceBeta redex
-
   describe "interpretChurchNumber" $ do
     it "(\\ \\ 1) == #0" $
       interpretChurchNumber (Abs $ Abs $ Var 1) `shouldBe` Just 0

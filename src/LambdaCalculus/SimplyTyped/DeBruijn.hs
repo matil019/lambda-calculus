@@ -32,7 +32,6 @@ module LambdaCalculus.SimplyTyped.DeBruijn
   , -- ** Reductions
     -- | These functions do /not/ consider types, because substitution is independent of typing.
     substitute, reduceBeta, reduceEta, reduceEtaShallow, reduceStep, reduceSteps
-  , reduceBeta2
   , -- ** Church encodings
     encodeChurchNumber, interpretChurchNumber, interpretChurchPair
   ) where
@@ -216,12 +215,7 @@ substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> subst
 
 -- | Performs a beta-reduction.
 reduceBeta :: Term -> Maybe Term
-reduceBeta (App (Abs m) n) = Just $ substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
-reduceBeta _ = Nothing
-
--- | Performs a beta-reduction.
-reduceBeta2 :: Term -> Maybe Term
-reduceBeta2 = \case
+reduceBeta = \case
   App (Abs m) n -> Just $ go 0 m n
   _ -> Nothing
   where
