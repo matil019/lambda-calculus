@@ -30,7 +30,7 @@ module LambdaCalculus.SimplyTyped.DeBruijn
     -- | Generated terms may or may not be well-typed.
     genTerm, genModifiedTerm, genClosedTerm
   , -- ** Manipulating terms
-    substitute, incrementFreeVars
+    substitute, incrementFreeVars, decrementFreeVars
   , -- ** Reductions
     -- | These functions do /not/ consider types, because substitution is independent of typing.
     reduceBeta, reduceEta, reduceEtaShallow, reduceStep, reduceSteps
@@ -240,6 +240,58 @@ incrementFreeVars inc = go 0
   go bound (Abs m) = Abs $ go (bound+1) m
   go bound (App m n) = App (go bound m) (go bound n)
   go _ m@(Const _ _) = m
+
+-- | @decrementFreeVars x@ is the same as @`incrementFreeVars` (-x)@ except
+-- that this makes sure indices in `Var`s remain valid.
+--
+-- An index is /valid/ here iff it is larger than the number of enclosing
+-- `Abs`s after decrementing. In particular, any index must be positive to be
+-- valid.
+--
+-- Free variable(s) are decremented:
+--
+-- >>> decrementFreeVars 3 (Var 4)
+-- Just (Var 1)
+--
+-- Even those which are in some abstraction(s):
+--
+-- >>> decrementFreeVars 3 (Abs (Var 5))
+-- Just (Abs (Var 2))
+--
+-- Bound variable(s) are unchanged:
+--
+-- >>> decrementFreeVars 3 (App (Var 6) (Abs (Var 1)))
+-- Just (App (Var 3) (Abs (Var 1)))
+--
+-- @`Var` 0@ is not valid so it's a failure:
+--
+-- >>> decrementFreeVars 3 (Var 3)
+-- Nothing
+--
+-- The next example is a failure case because decrementing the variable yields
+-- @Abs (Var 1)@ but the variable is now bound by the enclosing abstraction,
+-- altering the meaning of the term. Since `decrementFreeVars` must not change
+-- the meaning of terms, it is treated as a failure:
+--
+-- >>> decrementFreeVars 3 (Abs (Var 4))
+-- Nothing
+--
+-- TODO test this:
+--
+-- @
+-- case `decrementFreeVars` dec m of
+--   Just m' -> m' == `incrementFreeVars` (-dec) m
+-- @
+decrementFreeVars :: Int -> Term -> Maybe Term
+decrementFreeVars dec = go 0
+  where
+  go bound (Var x)
+    | x <= bound = Just (Var x)
+    | let x' = x - dec, x' > bound = Just (Var x')
+    | otherwise = Nothing
+  go bound (Abs m) = Abs <$> go (bound+1) m
+  go bound (App m n) = App <$> go bound m <*> go bound n
+  go _ m@(Const _ _) = pure m
 
 -- | Performs a beta-reduction.
 reduceBeta :: Term -> Maybe Term
