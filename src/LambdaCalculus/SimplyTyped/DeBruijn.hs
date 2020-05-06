@@ -272,13 +272,6 @@ incrementFreeVars inc = go 0
 --
 -- >>> decrementFreeVars 3 (Abs (Var 4))
 -- Nothing
---
--- TODO test this:
---
--- @
--- case `decrementFreeVars` dec m of
---   Just m' -> m' == `incrementFreeVars` (-dec) m
--- @
 decrementFreeVars :: Int -> Term -> Maybe Term
 decrementFreeVars dec = go 0
   where
