@@ -50,7 +50,7 @@ data TermRaw
 data Term = Term
   { termRaw :: TermRaw
   , -- | The number of sub-terms in a 'Term'.
-    countTerm :: Int
+    countTerm :: !Int
     -- TODO add `freeDepth`? (to optimize `isClosed`, and `incrementFreeVars`)
   }
   deriving (Eq, Generic, NFData, Q.CoArbitrary, Q.Function, Show)
