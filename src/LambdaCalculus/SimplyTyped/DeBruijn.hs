@@ -231,6 +231,7 @@ substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> subst
 incrementFreeVars :: Int -> Term -> Term
 incrementFreeVars inc = go 0
   where
+  go _ m | isClosed m = m
   go bound (Var x)
     | x > bound = Var (x + inc)
     | otherwise = Var x
@@ -275,6 +276,7 @@ incrementFreeVars inc = go 0
 decrementFreeVars :: Int -> Term -> Maybe Term
 decrementFreeVars dec = go 0
   where
+  go _ m | isClosed m = Just m
   go bound (Var x)
     | x <= bound = Just (Var x)
     | let x' = x - dec, x' > bound = Just (Var x')
@@ -289,6 +291,7 @@ reduceBeta = \case
   App (Abs m) n -> Just $ go 0 m n
   _ -> Nothing
   where
+  go _ m _ | isClosed m = m
   go bound (Var x) n = case compare (bound + 1) x of
     EQ -> incrementFreeVars bound n
     LT -> Var (x-1)
