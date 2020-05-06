@@ -15,7 +15,7 @@ module LambdaCalculus.SimplyTyped.DeBruijn
   , PolyType(..), _Mono, _ForAll
   , topMono, boundVars
   , -- * Terms
-    Term(..), _Var, _Abs, _App, _Const
+    VarIndex, Term(Var, Abs, App, Const), _Var, _Abs, _App, _Const
   , -- ** Basic operations
     formatTerm, parseTerm, countTerm, isClosed, foldVars, foldMapVars
   , -- ** Accessors and lists

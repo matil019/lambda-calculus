@@ -4,10 +4,20 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 -- | Simply-typed lambda terms in De Bruijn index notation.
-module LambdaCalculus.SimplyTyped.HindleyMilner.Term where
+module LambdaCalculus.SimplyTyped.HindleyMilner.Term
+  ( VarIndex, TermRaw(..), Term(.., Var, Abs, App, Const)
+  , _Var, _Abs, _App, _Const
+  , BoundTerm(..), ixBound
+  , formatTerm
+  , isClosed
+  , foldVars, foldMapVars
+  , linear, toList, index
+  )
+  where
 
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Plated, Prism', Traversal, Traversal', ix, plate, preview, prism')
@@ -20,16 +30,85 @@ import LambdaCalculus.Utils (isSimpleIdent)
 import qualified Data.List.NonEmpty as NE
 import qualified Test.QuickCheck as Q
 
+-- | A variable index.
+--
+-- Must be @1@ or greater.
+type VarIndex = Int
+
+-- | A lambda term without metadata.
+data TermRaw
+  = VarRaw VarIndex           -- ^ A variable (must start at @1@)
+  | AbsRaw Term               -- ^ An abstraction
+  | AppRaw Term Term          -- ^ An application
+  | ConstRaw MonoType String  -- ^ A constant
+  deriving (Eq, Generic, NFData, Q.CoArbitrary, Q.Function, Show)
+
 -- | A lambda term with typed constants in De Bruijn index notation.
 --
 -- Type annotations in abstractions are omitted so that they are inferred by
 -- Hindley-Milner.
-data Term
-  = Var Int                -- ^ A variable (must start at @1@)
-  | Abs Term               -- ^ An abstraction
-  | App Term Term          -- ^ An application
-  | Const MonoType String  -- ^ A constant
+data Term = Term
+  { termRaw :: TermRaw
+  , -- | The number of sub-terms in a 'Term'.
+    countTerm :: Int
+    -- TODO add `freeDepth`? (to optimize `isClosed`, and `incrementFreeVars`)
+  }
   deriving (Eq, Generic, NFData, Q.CoArbitrary, Q.Function, Show)
+
+-- | A variable (must start at @1@).
+--
+-- A smart constructor which matches 'termRaw' and handles other fields
+-- transparently.
+pattern Var :: VarIndex -> Term
+pattern Var x <- Term { termRaw = VarRaw x }
+  where
+  Var x = Term
+    { termRaw = VarRaw x
+    , countTerm = 1
+    }
+
+-- | An abstraction.
+--
+-- A smart constructor which matches 'termRaw' and handles other fields
+-- transparently.
+pattern Abs :: Term -> Term
+pattern Abs m <- Term { termRaw = AbsRaw m }
+  where
+  Abs m = Term
+    { termRaw = AbsRaw m
+    , countTerm =
+        let Term{countTerm=sm} = m
+        in 1 + sm
+    }
+
+-- | An application.
+--
+-- A smart constructor which matches 'termRaw' and handles other fields
+-- transparently.
+pattern App :: Term -> Term -> Term
+pattern App m n <- Term { termRaw = AppRaw m n }
+  where
+  App m n = Term
+    { termRaw = AppRaw m n
+    , countTerm =
+        let Term{countTerm=sm} = m
+            Term{countTerm=sn} = n
+        in 1 + sm + sn
+    }
+
+-- | A typed constant.
+--
+-- A smart constructor which matches 'termRaw' and handles other fields
+-- transparently.
+pattern Const :: MonoType -> String -> Term
+pattern Const t a <- Term { termRaw = ConstRaw t a }
+  where
+  Const t a = Term
+    { termRaw = ConstRaw t a
+    , countTerm = 1
+    }
+
+{-# COMPLETE Var, Abs, App, Const #-}
 
 -- | Traverses sub-terms in depth-first, pre-order.
 --
@@ -118,13 +197,6 @@ formatTerm (App m n)
   where
   paren s = "(" <> s <> ")"
 
--- | Counts a number of sub-terms in a 'Term'.
-countTerm :: Term -> Int
-countTerm (Var _) = 1
-countTerm (Const _ _) = 1
-countTerm (Abs m) = 1 + countTerm m
-countTerm (App m n) = 1 + countTerm m + countTerm n
-
 -- | Is this 'Term' closed (i.e. has no free variables)?
 --
 -- Constants are not considered as free variables.
@@ -134,7 +206,7 @@ isClosed = getAll . foldVars (\bound x -> All $ x <= bound)
 -- | Folds over 'Var's in a term.
 foldVars
   :: Monoid m
-  => (Int -> Int -> m)  -- ^ args: the number of 'Abs' containing a 'Var' and the content of the 'Var'.
+  => (Int -> VarIndex -> m)  -- ^ args: the number of 'Abs' containing a 'Var' and the variable index.
   -> Term
   -> m
 foldVars = foldMapVars mempty id
@@ -142,9 +214,9 @@ foldVars = foldMapVars mempty id
 -- | Folds over 'Var's in a term with a custom conversion to a monoid.
 foldMapVars
   :: Semigroup m
-  => m                  -- ^ an "mempty"; used for 'Const's
-  -> (a -> m)           -- ^ a convertion to a monoid
-  -> (Int -> Int -> a)  -- ^ args: the number of 'Abs' containing a 'Var' and the content of the 'Var'.
+  => m                       -- ^ an "mempty"; used for 'Const's
+  -> (a -> m)                -- ^ a conversion to a monoid
+  -> (Int -> VarIndex -> a)  -- ^ args: the number of 'Abs' containing a 'Var' and the variable index.
   -> Term
   -> m
 foldMapVars empty am f = go 0
