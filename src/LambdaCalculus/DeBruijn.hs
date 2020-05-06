@@ -28,8 +28,10 @@ module LambdaCalculus.DeBruijn
     ClosedTerm(..), unClosedTerm, toClosedTermUnchecked
   , -- ** Generating terms
     genTerm, genModifiedTerm
+  , -- ** Manipulating terms
+    substitute, incrementFreeVars, decrementFreeVars
   , -- ** Reductions
-    substitute, reduceBeta, reduceStep, reduceSteps
+    reduceBeta, reduceStep, reduceSteps
   , -- ** Church encodings
     encodeChurchNumber, genChurchNumber, interpretChurchNumber, interpretChurchPair
   ) where
@@ -268,9 +270,63 @@ toClosedTermUnchecked = coerce Typed.ClosedTerm
 
 -- | Performs a substitution.
 --
--- You would like to use 'reduceBeta' instead of using this directly.
+-- Substitutes the free variables in a term with elements in a list in the
+-- order.
+--
+-- The indices of free variables are adjusted to preserve the meaning of the
+-- term.
 substitute :: InfList Term -> Term -> Term
 substitute = coerce Typed.substitute
+
+-- | @incrementFreeVars inc m@ increments free variables in @m@ by @inc@.
+--
+-- @inc@ should be positive but it is not checked. See also `decrementFreeVars`.
+--
+-- `incrementFreeVars` is a specialization of `substitute` but may have better
+-- performance.
+--
+-- @
+-- `incrementFreeVars` inc == `substitute` (`InfList.enumFrom` (1 + inc))
+-- @
+incrementFreeVars :: Int -> Term -> Term
+incrementFreeVars = coerce Typed.incrementFreeVars
+
+-- | @decrementFreeVars x@ is the same as @`incrementFreeVars` (-x)@ except
+-- that this makes sure indices in `Var`s remain valid.
+--
+-- An index is /valid/ here iff it is larger than the number of enclosing
+-- `Abs`s after decrementing. In particular, an index must be positive to be
+-- valid.
+--
+-- Free variable(s) are decremented:
+--
+-- >>> decrementFreeVars 3 (Var 4)
+-- Just (Var 1)
+--
+-- Even those which are in some abstraction(s):
+--
+-- >>> decrementFreeVars 3 (Abs (Var 5))
+-- Just (Abs (Var 2))
+--
+-- Bound variable(s) are unchanged:
+--
+-- >>> decrementFreeVars 3 (App (Var 6) (Abs (Var 1)))
+-- Just (App (Var 3) (Abs (Var 1)))
+--
+-- @`Var` 0@ is not valid so it's a failure:
+--
+-- >>> decrementFreeVars 3 (Var 3)
+-- Nothing
+--
+-- The next example is a failure case because decrementing the variable yields
+-- @Abs (Var 1)@ but the variable is now bounded by the enclosing abstraction,
+-- altering the meaning of the term. Since `decrementFreeVars` must not change
+-- the meaning of terms, it is treated as a failure:
+--
+-- >>> decrementFreeVars 3 (Abs (Var 4))
+-- Nothing
+decrementFreeVars :: Int -> Term -> Maybe Term
+decrementFreeVars = coerce Typed.decrementFreeVars
 
 -- | Performs a beta-reduction.
 reduceBeta :: Term -> Maybe Term

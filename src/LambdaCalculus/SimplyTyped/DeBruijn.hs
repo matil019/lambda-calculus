@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -28,9 +29,11 @@ module LambdaCalculus.SimplyTyped.DeBruijn
   , -- ** Generating terms
     -- | Generated terms may or may not be well-typed.
     genTerm, genModifiedTerm, genClosedTerm
+  , -- ** Manipulating terms
+    substitute, incrementFreeVars, decrementFreeVars
   , -- ** Reductions
     -- | These functions do /not/ consider types, because substitution is independent of typing.
-    substitute, reduceBeta, reduceEta, reduceEtaShallow, reduceStep, reduceSteps
+    reduceBeta, reduceEta, reduceEtaShallow, reduceStep, reduceSteps
   , -- ** Church encodings
     encodeChurchNumber, interpretChurchNumber, interpretChurchPair
   ) where
@@ -202,7 +205,10 @@ runGeneticTerm = unClosedTerm . unGeneticTerm
 
 -- | Performs a substitution.
 --
--- You would like to use 'reduceBeta' instead of using this directly.
+-- Substitutes the free variables in a term with elements in a list in the
+-- order.
+--
+-- The indices of variables are adjusted to preserve the meaning of the term.
 substitute :: InfList Term -> Term -> Term
 substitute _ m@(Const _ _) = m
 substitute s (Var x) = InfList.toList s !! (x-1)
@@ -212,10 +218,84 @@ substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> subst
   s' = fmap shift s
   shift = substitute (fmap Var $ InfList.enumFrom 2)
 
+-- | @incrementFreeVars inc m@ increments free variables in @m@ by @inc@.
+--
+-- @inc@ should be positive but it is not checked. See also `decrementFreeVars`.
+--
+-- `incrementFreeVars` is a specialization of `substitute` but may have better
+-- performance.
+--
+-- @
+-- `incrementFreeVars` inc == `substitute` (fmap `Var` $ `InfList.enumFrom` (1 + inc))
+-- @
+incrementFreeVars :: Int -> Term -> Term
+incrementFreeVars inc = go 0
+  where
+  go bound (Var x)
+    | x > bound = Var (x + inc)
+    | otherwise = Var x
+  go bound (Abs m) = Abs $ go (bound+1) m
+  go bound (App m n) = App (go bound m) (go bound n)
+  go _ m@(Const _ _) = m
+
+-- | @decrementFreeVars x@ is the same as @`incrementFreeVars` (-x)@ except
+-- that this makes sure indices in `Var`s remain valid.
+--
+-- An index is /valid/ here iff it is larger than the number of enclosing
+-- `Abs`s after decrementing. In particular, any index must be positive to be
+-- valid.
+--
+-- Free variable(s) are decremented:
+--
+-- >>> decrementFreeVars 3 (Var 4)
+-- Just (Var 1)
+--
+-- Even those which are in some abstraction(s):
+--
+-- >>> decrementFreeVars 3 (Abs (Var 5))
+-- Just (Abs (Var 2))
+--
+-- Bound variable(s) are unchanged:
+--
+-- >>> decrementFreeVars 3 (App (Var 6) (Abs (Var 1)))
+-- Just (App (Var 3) (Abs (Var 1)))
+--
+-- @`Var` 0@ is not valid so it's a failure:
+--
+-- >>> decrementFreeVars 3 (Var 3)
+-- Nothing
+--
+-- The next example is a failure case because decrementing the variable yields
+-- @Abs (Var 1)@ but the variable is now bound by the enclosing abstraction,
+-- altering the meaning of the term. Since `decrementFreeVars` must not change
+-- the meaning of terms, it is treated as a failure:
+--
+-- >>> decrementFreeVars 3 (Abs (Var 4))
+-- Nothing
+decrementFreeVars :: Int -> Term -> Maybe Term
+decrementFreeVars dec = go 0
+  where
+  go bound (Var x)
+    | x <= bound = Just (Var x)
+    | let x' = x - dec, x' > bound = Just (Var x')
+    | otherwise = Nothing
+  go bound (Abs m) = Abs <$> go (bound+1) m
+  go bound (App m n) = App <$> go bound m <*> go bound n
+  go _ m@(Const _ _) = pure m
+
 -- | Performs a beta-reduction.
 reduceBeta :: Term -> Maybe Term
-reduceBeta (App (Abs m) n) = Just $ substitute (InfList.cons n $ fmap Var $ InfList.enumFrom 1) m
-reduceBeta _ = Nothing
+reduceBeta = \case
+  App (Abs m) n -> Just $ go 0 m n
+  _ -> Nothing
+  where
+  go bound (Var x) n = case compare (bound + 1) x of
+    EQ -> incrementFreeVars bound n
+    LT -> Var (x-1)
+    GT -> Var x
+  go bound (Abs m) n = Abs $ go (bound+1) m n
+  go bound (App m m') n = App (go bound m n) (go bound m' n)
+  go _ m@(Const _ _) _ = m
 
 -- | Performs an eta-reduction on the outermost abstraction.
 --

@@ -6,6 +6,7 @@ import Criterion.Main
 
 import qualified LambdaCalculus.DeBruijn as DeBruijn
 import qualified LambdaCalculus.DeBruijn2 as DeBruijn2
+import qualified LambdaCalculus.SimplyTyped.DeBruijnBench
 import qualified LambdaCalculus.Term as Term
 import qualified Test.QuickCheck as Q
 
@@ -25,4 +26,6 @@ main = defaultMain
       , bgroup "DeBruijn"  $ benches $ map (snd . DeBruijn.toDeBruijn mempty) terms
       , bgroup "DeBruijn2" $ benches $ map (snd . DeBruijn2.toDeBruijn mempty) terms
       ]
+  , bgroup "LambdaCalculus.SimplyTyped.DeBruijn"
+      LambdaCalculus.SimplyTyped.DeBruijnBench.benches
   ]
