@@ -228,8 +228,6 @@ substitute s (Abs m) = Abs (substitute (InfList.cons (Var 1) $ fmap (\i -> subst
 -- @
 -- `incrementFreeVars` inc == `substitute` (fmap `Var` $ `InfList.enumFrom` (1 + inc))
 -- @
---
--- TODO add a bench to make sure `incrementFreeVars` is faster
 incrementFreeVars :: Int -> Term -> Term
 incrementFreeVars inc = go 0
   where

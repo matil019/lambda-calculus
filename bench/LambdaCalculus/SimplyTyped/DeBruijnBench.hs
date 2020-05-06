@@ -17,6 +17,13 @@ benches =
       [ bench "recursive"  $ nf (map reduceBeta) terms
       , bench "substitute" $ nf (map reduceBeta_substitute) terms
       ]
+  , let gen = (\(Q.NonNegative (Q.Small inc)) m -> (inc, m)) <$> Q.arbitrary <*> Q.arbitrary
+    in
+    env (Q.generate $ replicateM 100 $ Q.resize 100 gen) $ \incsTerms ->
+      bgroup "incrementFreeVars"
+      [ bench "incrementFreeVars" $ nf (map (uncurry incrementFreeVars)) incsTerms
+      , bench "substitute" $ nf (map (\(inc, m) -> substitute (fmap Var $ InfList.enumFrom (1 + inc)) m)) incsTerms
+      ]
   ]
 
 -- | Performs a beta-reduction.
