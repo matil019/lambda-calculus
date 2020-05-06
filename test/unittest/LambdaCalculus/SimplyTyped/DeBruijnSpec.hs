@@ -7,10 +7,17 @@ import LambdaCalculus.SimplyTyped.HindleyMilner.Term.Instances ()
 import LensLawSpec (prismLawSpec)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
+import Test.QuickCheck (NonNegative(NonNegative))
 import Test.QuickCheck.Instances.Natural ()
+
+import qualified LambdaCalculus.InfList as InfList
 
 spec :: Spec
 spec = do
+  describe "incrementFreeVars" $ do
+    prop "incrementFreeVars inc == substitute [(1+inc)..]" $ \m (NonNegative inc) ->
+      incrementFreeVars inc m `shouldBe` substitute (fmap Var $ InfList.enumFrom (1 + inc)) m
+
   describe "interpretChurchNumber" $ do
     it "(\\ \\ 1) == #0" $
       interpretChurchNumber (Abs $ Abs $ Var 1) `shouldBe` Just 0
