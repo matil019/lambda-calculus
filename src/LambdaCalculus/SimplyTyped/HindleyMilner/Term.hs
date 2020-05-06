@@ -22,7 +22,6 @@ module LambdaCalculus.SimplyTyped.HindleyMilner.Term
 import Control.DeepSeq (NFData)
 import Control.Lens (Index, IxValue, Ixed, Plated, Prism', Traversal, Traversal', ix, plate, preview, prism')
 import Data.List.NonEmpty (NonEmpty((:|)))
-import Data.Monoid (All(All), getAll)
 import GHC.Generics (Generic)
 import LambdaCalculus.SimplyTyped.HindleyMilner.Types (MonoType, formatMonoType)
 import LambdaCalculus.Utils (isSimpleIdent)
@@ -49,9 +48,10 @@ data TermRaw
 -- Hindley-Milner.
 data Term = Term
   { termRaw :: TermRaw
+  , -- | @0@ indicates this term is closed.
+    freeDepth :: !Int
   , -- | The number of sub-terms in a 'Term'.
     countTerm :: !Int
-    -- TODO add `freeDepth`? (to optimize `isClosed`, and `incrementFreeVars`)
   }
   deriving (Eq, Generic, NFData, Q.CoArbitrary, Q.Function, Show)
 
@@ -64,6 +64,7 @@ pattern Var x <- Term { termRaw = VarRaw x }
   where
   Var x = Term
     { termRaw = VarRaw x
+    , freeDepth = x
     , countTerm = 1
     }
 
@@ -76,6 +77,9 @@ pattern Abs m <- Term { termRaw = AbsRaw m }
   where
   Abs m = Term
     { termRaw = AbsRaw m
+    , freeDepth =
+        let Term{freeDepth=fm} = m
+        in max 0 (fm - 1)
     , countTerm =
         let Term{countTerm=sm} = m
         in 1 + sm
@@ -90,6 +94,10 @@ pattern App m n <- Term { termRaw = AppRaw m n }
   where
   App m n = Term
     { termRaw = AppRaw m n
+    , freeDepth =
+        let Term{freeDepth=fm} = m
+            Term{freeDepth=fn} = n
+        in max fm fn
     , countTerm =
         let Term{countTerm=sm} = m
             Term{countTerm=sn} = n
@@ -105,6 +113,7 @@ pattern Const t a <- Term { termRaw = ConstRaw t a }
   where
   Const t a = Term
     { termRaw = ConstRaw t a
+    , freeDepth = 0
     , countTerm = 1
     }
 
@@ -201,7 +210,7 @@ formatTerm (App m n)
 --
 -- Constants are not considered as free variables.
 isClosed :: Term -> Bool
-isClosed = getAll . foldVars (\bound x -> All $ x <= bound)
+isClosed = (== 0) . freeDepth
 
 -- | Folds over 'Var's in a term.
 foldVars
