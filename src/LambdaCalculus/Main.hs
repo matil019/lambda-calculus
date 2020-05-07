@@ -167,10 +167,11 @@ data Result = Result
 -- | Evaluates a score of a 'Result'. The larger, the better.
 --
 -- This doesn't include the size penalty.
-resultScore :: Result -> Int
+resultScore :: Result -> Double
 resultScore Result{resultAddition, resultSubtraction} =
-  sum $ map arithResultToInt (resultAddition <> resultSubtraction)
+  sqrt $ fromIntegral $ (sum $ map arithResultToInt resultAddition) * (sum $ map arithResultToInt resultSubtraction)
   where
+  arithResultToInt :: ArithResult -> Int
   arithResultToInt ArithInvalid = 0
   arithResultToInt ArithIncorrect = 1
   arithResultToInt ArithCorrect = 2
