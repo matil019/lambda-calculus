@@ -66,9 +66,16 @@ log10 :: Double -> Double
 log10 x = log x / log 10
 
 -- | Runs 'Gen' deterministically by splitting @QCGen@ in the reader monad.
+--
+-- See `runGen'` which provides a non-monad-reader interface.
 runGen :: (MonadIO m, MonadReader (TVar QCGen) m) => Int -> Gen a -> m a
 runGen size gen = do
   qcgenVar <- Reader.ask
+  runGen' qcgenVar size gen
+
+-- | Runs 'Gen' deterministically by splitting @QCGen@ in the 'TVar'.
+runGen' :: MonadIO m => TVar QCGen -> Int -> Gen a -> m a
+runGen' qcgenVar size gen = do
   qcgen <- liftIO $ atomically $ stateTVar qcgenVar split
   pure $ unGen gen qcgen size
 
@@ -114,6 +121,10 @@ pooledMapConcurrentlyC f as = do
     in pooledMapConcurrently producer as `finally` (atomically $ closeTMQueue q)
   C.repeatM (liftIO $ atomically $ readTMQueue q) .| unNoneTerminateC
   liftIO $ wait asy
+
+-- | Flipped `pooledMapConcurrentlyC`.
+pooledForConcurrentlyC :: (MonadIO m, Traversable t) => t a -> (a -> ConduitT () o IO r) -> ConduitT i o m (t r)
+pooledForConcurrentlyC = flip pooledMapConcurrentlyC
 
 -- | A result of evaluating a lambda term.
 newtype Result = Result [(Natural, Natural, (Maybe Natural, Maybe Natural))]
