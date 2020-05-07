@@ -224,9 +224,6 @@ main = do
            RunEvent _ -> Nothing
            GenEvent popu -> fmap (maximumOn genEventScore . NE.toList) $ nonEmpty popu
            )
-      -- TODO remove this output
-      .| iterPerMC 1000 (\x -> liftIO $ putStrLn $
-           "current best score: " <> show (genEventScore x) <> ", term: " <> formatTerm (runGeneticTerm (genEventTerm x)))
       .| C.last
     whenJust best $ \x -> do
       hPutStrLn stderr $ "final best score: " <> show (genEventScore x)
