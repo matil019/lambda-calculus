@@ -13,7 +13,6 @@ import Control.Concurrent.Async (async, wait)
 import Control.Concurrent.STM (TVar, atomically, newTVarIO, stateTVar)
 import Control.Concurrent.STM.TMQueue (closeTMQueue, newTMQueueIO, readTMQueue, writeTMQueue)
 import Control.Exception (SomeException, mask, throwIO)
-import Control.Lens (both, over)
 import Control.Monad (join, replicateM)
 import Control.Monad.Extra (whenJust, whenJustM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -23,6 +22,7 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List (intercalate, sortOn)
 import Data.List.Extra (maximumOn)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
+import Data.Maybe (listToMaybe)
 import Data.Ord (Down(Down))
 import LambdaCalculus.SimplyTyped.DeBruijn
   ( GeneticTerm
@@ -38,7 +38,6 @@ import LambdaCalculus.SimplyTyped.DeBruijn
   , runGeneticTerm
   )
 import LambdaCalculus.Genetic (Individual(Individual), newGeneration)
-import Numeric.Natural (Natural)
 import System.Environment (getArgs, withArgs)
 import System.Exit (exitSuccess)
 import System.IO (BufferMode(LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
@@ -126,21 +125,55 @@ pooledMapConcurrentlyC f as = do
 pooledForConcurrentlyC :: (MonadIO m, Traversable t) => t a -> (a -> ConduitT () o IO r) -> ConduitT i o m (t r)
 pooledForConcurrentlyC = flip pooledMapConcurrentlyC
 
+reduceTerm :: Term -> Term
+reduceTerm m = runConduitPure
+   $ reduceSteps m
+  .| C.take 1000
+  .| C.takeWhile ((<= 1000) . countTerm)
+  .| C.lastDef m
+
+data ArithResult = ArithInvalid | ArithIncorrect | ArithCorrect
+  deriving (Eq, Ord, Show)
+
+evaluateAddition :: Term -> [ArithResult]
+evaluateSubtraction :: Term -> [ArithResult]
+(evaluateAddition, evaluateSubtraction) = (go (+), go (-))
+  where
+  go f = \m -> flip map probs $ \(a, b) ->
+    case interpretChurchNumber $ reduceTerm $ apply m a b of
+      Just x | f a b == x -> ArithCorrect
+             | otherwise -> ArithIncorrect
+      Nothing -> ArithInvalid
+    where
+    apply m a b = App (App m (encodeChurchNumber a)) (encodeChurchNumber b)
+    probs =
+      [ (0, 0)
+      , (1, 0)
+      , (1, 1)
+      , (2, 0)
+      , (2, 1)
+      , (2, 2)
+      , (3, 1)
+      , (3, 2)
+      ]
+
 -- | A result of evaluating a lambda term.
-newtype Result = Result [(Natural, Natural, (Maybe Natural, Maybe Natural))]
+data Result = Result
+  { resultAddition :: [ArithResult]
+  , resultSubtraction :: [ArithResult]
+  }
   deriving (Eq, Ord, Show)
 
 -- | Evaluates a score of a 'Result'. The larger, the better.
 --
 -- This doesn't include the size penalty.
 resultScore :: Result -> Int
-resultScore (Result xs) = sum $ flip map xs
-  $ \(a, b, (r1, r2)) -> justEq (a + b) r1 + justEq (a - b) r2
+resultScore Result{resultAddition, resultSubtraction} =
+  sum $ map arithResultToInt (resultAddition <> resultSubtraction)
   where
-  justEq r (Just m)
-    | m == r = 2
-    | otherwise = 1
-  justEq _ Nothing = 0
+  arithResultToInt ArithInvalid = 0
+  arithResultToInt ArithIncorrect = 1
+  arithResultToInt ArithCorrect = 2
 
 -- | A null data type for use with 'TypeSet'
 data LikeUntyped
@@ -151,6 +184,7 @@ instance TypeSet LikeUntyped where
 -- | An element of `GenEvent`.
 data GenEventElem = GenEventElem
   { genEventTerm :: GeneticTerm LikeUntyped
+  , genEventResult :: Result
   , genEventScore :: Double
   }
   deriving (Eq, Show)
@@ -215,11 +249,17 @@ main = do
         loop (runIdx + 1) genIdx
       GenEvent popu -> do
         let ne0 f = maybe 0 f . nonEmpty
-        liftIO $ putStrLn $ formatLabeled
+        liftIO $ putStrLn $ formatLabeled $
+          let bestTerm = listToMaybe $ sortOn (Down . genEventScore) popu
+              summarizeArithResult xs = printf "%d/%d" (length $ filter (==ArithCorrect) xs) (length xs)
+          in
           [ ("generation", show genIdx)
-          , ("score best", printf "%.03f" $ ne0 maximum $ map genEventScore popu)
+          , ("score best", printf "%.03f" $ maybe 0 genEventScore bestTerm)
           , ("score avg",  printf "%.03f" $ ne0 average $ map genEventScore popu)
           , ("size avg",   printf "%.03f" $ ne0 average $ map (realToFrac . countTerm . runGeneticTerm . genEventTerm) popu)
+          , ("add best",   maybe "-" (summarizeArithResult . resultAddition . genEventResult) $ bestTerm)
+          , ("sub best",   maybe "-" (summarizeArithResult . resultSubtraction . genEventResult) $ bestTerm)
+          , ("term best",  maybe "-" (formatTerm . runGeneticTerm . genEventTerm) bestTerm)
           ]
         C.yield evt
         loop runIdx (genIdx + 1)
@@ -234,57 +274,43 @@ main = do
   geneAlgo = do
     terms <- runGen 30 $ replicateM numPopulation arbitrary
     -- POPUlation
-    popu <- pooledMapConcurrentlyC (\term -> (term,) <$> runMeasureYield (runGeneticTerm term)) terms
-    C.yield $ GenEvent $ map (uncurry GenEventElem) popu
+    popu <- pooledMapConcurrentlyC (\term -> runMeasureYield (runGeneticTerm term) >>= \(result, score) -> pure $ GenEventElem term result score) terms
+    C.yield $ GenEvent popu
     loop popu
     where
+    loop :: (MonadIO m, MonadReader (TVar QCGen) m) => [GenEventElem] -> ConduitT i Event m r
     loop prevPopu = do
-      terms <- runGen 30 $ newGeneration $ map (\(m, score) -> Individual m (scoreToWeight score)) prevPopu
-      nextPopu <- pooledMapConcurrentlyC (\term -> (term,) <$> runMeasureYield (runGeneticTerm term)) terms
+      terms <- runGen 30 $ newGeneration $ map (\x -> Individual (genEventTerm x) (scoreToWeight $ genEventScore x)) prevPopu
+      nextPopu <- pooledMapConcurrentlyC (\term -> runMeasureYield (runGeneticTerm term) >>= \(result, score) -> pure $ GenEventElem term result score) terms
       mergedPopu <- runGen 30 $ do
-        let bothPopu = sortOn (\(_, score) -> Down score) (nextPopu <> prevPopu)
+        let bothPopu = sortOn (Down . genEventScore) (nextPopu <> prevPopu)
             numElite = numPopulation `div` 5
             numRandom = numPopulation - numElite
             (elitePopu, badPopu) = splitAt numElite bothPopu
         randomPopu <-
-          let weighted = map (\x@(_, score) -> (scoreToWeight score, pure x)) badPopu
+          let weighted = map (\x -> (scoreToWeight $ genEventScore x, pure x)) badPopu
           in replicateM numRandom $ Q.frequency weighted
         pure $ elitePopu <> randomPopu
-      C.yield $ GenEvent $ map (uncurry GenEventElem) mergedPopu
+      C.yield $ GenEvent mergedPopu
       loop mergedPopu
 
     scoreToWeight score = round $ max 1 $ 1000 * score
 
     numPopulation = 1000
 
-    runMeasureYield :: MonadIO m => Term -> ConduitT i Event m Double
+    runMeasureYield :: MonadIO m => Term -> ConduitT i Event m (Result, Double)
     runMeasureYield m = do
       (time, (result, score)) <- liftIO $ duration $ do
         let !result = runTerm m
             !score = realToFrac (resultScore result) - sqrt (realToFrac $ countTerm m) / 10
         pure $! (result, score)
       C.yield $ RunEvent (m, result, score, time)
-      pure score
+      pure (result, score)
 
   runTerm :: Term -> Result
-  runTerm m = Result $ flip map probs $ \(a, b) ->
-    let apply x = App (App x (encodeChurchNumber a)) (encodeChurchNumber b)
-    in (a, b, over both (interpretChurchNumber . redu . apply) $ interpretChurchPair $ redu m)
-    where
-    redu :: Term -> Term
-    redu x = runConduitPure
-       $ reduceSteps x
-      .| C.take 1000
-      .| C.takeWhile ((<= 1000) . countTerm)
-      .| C.lastDef x
-
-    probs =
-      [ (0, 0)
-      , (1, 0)
-      , (1, 1)
-      , (2, 0)
-      , (2, 1)
-      , (2, 2)
-      , (3, 1)
-      , (3, 2)
-      ]
+  runTerm mainTerm =
+    let (arith1, arith2) = interpretChurchPair $ reduceTerm mainTerm
+    in Result
+       { resultAddition = evaluateAddition arith1
+       , resultSubtraction = evaluateSubtraction arith2
+       }
