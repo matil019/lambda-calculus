@@ -148,10 +148,17 @@ data LikeUntyped
 instance TypeSet LikeUntyped where
   genCandidateConst _ = pure Nothing
 
+-- | An element of `GenEvent`.
+data GenEventElem = GenEventElem
+  { genEventTerm :: GeneticTerm LikeUntyped
+  , genEventScore :: Double
+  }
+  deriving (Eq, Show)
+
 -- | An event in a progress of running Genetic Algorithm.
 data Event
   = RunEvent (Term, Result, Double, Seconds)
-  | GenEvent [(GeneticTerm LikeUntyped, Double)]
+  | GenEvent [GenEventElem]
 
 -- | The main function.
 main :: IO ()
@@ -181,14 +188,15 @@ main = do
       .| iterPrintEvent
       .| C.concatMap (\evt -> case evt of
            RunEvent _ -> Nothing
-           GenEvent popu -> fmap (maximumOn (\(_, score) -> score) . NE.toList) $ nonEmpty popu
+           GenEvent popu -> fmap (maximumOn genEventScore . NE.toList) $ nonEmpty popu
            )
-      .| iterPerMC 1000 (\(m, score) -> liftIO $ putStrLn $
-           "current best score: " <> show score <> ", term: " <> formatTerm (runGeneticTerm m))
+      -- TODO remove this output
+      .| iterPerMC 1000 (\x -> liftIO $ putStrLn $
+           "current best score: " <> show (genEventScore x) <> ", term: " <> formatTerm (runGeneticTerm (genEventTerm x)))
       .| C.last
-    whenJust best $ \(m, score) -> do
-      hPutStrLn stderr $ "final best score: " <> show score
-      hPutStrLn stderr $ formatTerm $ runGeneticTerm m
+    whenJust best $ \x -> do
+      hPutStrLn stderr $ "final best score: " <> show (genEventScore x)
+      hPutStrLn stderr $ formatTerm $ runGeneticTerm $ genEventTerm x
     whenJustM (readIORef exref) throwIO
   where
   iterPrintEvent :: MonadIO m => ConduitT Event Event m ()
@@ -209,9 +217,9 @@ main = do
         let ne0 f = maybe 0 f . nonEmpty
         liftIO $ putStrLn $ formatLabeled
           [ ("generation", show genIdx)
-          , ("score best", printf "%.03f" $ ne0 maximum $ map (\(_, score) -> score) popu)
-          , ("score avg",  printf "%.03f" $ ne0 average $ map (\(_, score) -> score) popu)
-          , ("size avg",   printf "%.03f" $ ne0 average $ map (\(m, _) -> realToFrac $ countTerm $ runGeneticTerm m) popu)
+          , ("score best", printf "%.03f" $ ne0 maximum $ map genEventScore popu)
+          , ("score avg",  printf "%.03f" $ ne0 average $ map genEventScore popu)
+          , ("size avg",   printf "%.03f" $ ne0 average $ map (realToFrac . countTerm . runGeneticTerm . genEventTerm) popu)
           ]
         C.yield evt
         loop runIdx (genIdx + 1)
@@ -227,7 +235,7 @@ main = do
     terms <- runGen 30 $ replicateM numPopulation arbitrary
     -- POPUlation
     popu <- pooledMapConcurrentlyC (\term -> (term,) <$> runMeasureYield (runGeneticTerm term)) terms
-    C.yield $ GenEvent popu
+    C.yield $ GenEvent $ map (uncurry GenEventElem) popu
     loop popu
     where
     loop prevPopu = do
@@ -242,7 +250,7 @@ main = do
           let weighted = map (\x@(_, score) -> (scoreToWeight score, pure x)) badPopu
           in replicateM numRandom $ Q.frequency weighted
         pure $ elitePopu <> randomPopu
-      C.yield $ GenEvent mergedPopu
+      C.yield $ GenEvent $ map (uncurry GenEventElem) mergedPopu
       loop mergedPopu
 
     scoreToWeight score = round $ max 1 $ 1000 * score
