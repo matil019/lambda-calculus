@@ -171,15 +171,15 @@ evaluateSubtraction :: Term -> [ArithResult]
 data Result = Result
   { resultAddition :: [ArithResult]
   , resultSubtraction :: [ArithResult]
+  , resultTermSize :: Int
   }
   deriving (Eq, Ord, Show)
 
 -- | Evaluates a score of a 'Result'. The larger, the better.
---
--- This doesn't include the size penalty.
 resultScore :: Result -> Double
-resultScore Result{resultAddition, resultSubtraction} =
-  sqrt $ fromIntegral $ (sum $ map arithResultToInt resultAddition) * (sum $ map arithResultToInt resultSubtraction)
+resultScore Result{resultAddition, resultSubtraction, resultTermSize} =
+  (sqrt $ fromIntegral $ (sum $ map arithResultToInt resultAddition) * (sum $ map arithResultToInt resultSubtraction))
+  - sqrt (fromIntegral resultTermSize) / 10
   where
   arithResultToInt :: ArithResult -> Int
   arithResultToInt ArithInvalid = 0
@@ -310,7 +310,7 @@ main = do
     runMeasureYield m = do
       (time, (result, score)) <- liftIO $ duration $ do
         let !result = runTerm m
-            !score = realToFrac (resultScore result) - sqrt (realToFrac $ countTerm m) / 10
+            !score = resultScore result
         pure $! (result, score)
       C.yield $ RunEvent (m, result, score, time)
       pure (result, score)
@@ -321,4 +321,5 @@ main = do
     in Result
        { resultAddition = evaluateAddition arith1
        , resultSubtraction = evaluateSubtraction arith2
+       , resultTermSize = countTerm mainTerm
        }
