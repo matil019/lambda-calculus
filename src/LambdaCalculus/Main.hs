@@ -196,13 +196,16 @@ instance TypeSet LikeUntyped where
 data GenEventElem = GenEventElem
   { genEventTerm :: GeneticTerm LikeUntyped
   , genEventResult :: Result
-  , genEventScore :: Double
   }
   deriving (Eq, Show)
 
+-- | A shorthand for the score of `GenEventElem`.
+genEventScore :: GenEventElem -> Double
+genEventScore = resultScore . genEventResult
+
 -- | An event in a progress of running Genetic Algorithm.
 data Event
-  = RunEvent (Term, Result, Double, Seconds)
+  = RunEvent (Term, Result, Seconds)
   | GenEvent [GenEventElem]
 
 -- | The main function.
@@ -245,7 +248,8 @@ main = do
   iterPrintEvent = loop (0 :: Int) (0 :: Int)
     where
     loop !runIdx !genIdx = whenJustM C.await $ \evt -> case evt of
-      RunEvent (term, _, score, time) -> do
+      RunEvent (term, result, time) -> do
+        let score = resultScore result
         liftIO $ putStrLn $ formatLabeled
           [ ("#gen",  show genIdx)
           , ("#step", show runIdx)
@@ -282,14 +286,14 @@ main = do
   geneAlgo = do
     terms <- runGen 30 $ replicateM numPopulation arbitrary
     -- POPUlation
-    popu <- pooledMapConcurrentlyC (\term -> runMeasureYield (runGeneticTerm term) >>= \(result, score) -> pure $ GenEventElem term result score) terms
+    popu <- pooledMapConcurrentlyC (\term -> runMeasureYield (runGeneticTerm term) >>= \result -> pure $ GenEventElem term result) terms
     C.yield $ GenEvent popu
     loop popu
     where
     loop :: (MonadIO m, MonadReader (TVar QCGen) m) => [GenEventElem] -> ConduitT i Event m r
     loop prevPopu = do
       terms <- runGen 30 $ newGeneration $ map (\x -> Individual (genEventTerm x) (scoreToWeight $ genEventScore x)) prevPopu
-      nextPopu <- pooledMapConcurrentlyC (\term -> runMeasureYield (runGeneticTerm term) >>= \(result, score) -> pure $ GenEventElem term result score) terms
+      nextPopu <- pooledMapConcurrentlyC (\term -> runMeasureYield (runGeneticTerm term) >>= \result -> pure $ GenEventElem term result) terms
       mergedPopu <- runGen 30 $ do
         let bothPopu = sortOn (Down . genEventScore) (nextPopu <> prevPopu)
             numElite = numPopulation `div` 5
@@ -306,14 +310,11 @@ main = do
 
     numPopulation = 1000
 
-    runMeasureYield :: MonadIO m => Term -> ConduitT i Event m (Result, Double)
+    runMeasureYield :: MonadIO m => Term -> ConduitT i Event m Result
     runMeasureYield m = do
-      (time, (result, score)) <- liftIO $ duration $ do
-        let !result = runTerm m
-            !score = resultScore result
-        pure $! (result, score)
-      C.yield $ RunEvent (m, result, score, time)
-      pure (result, score)
+      (time, result) <- liftIO $ duration $ pure $! runTerm m
+      C.yield $ RunEvent (m, result, time)
+      pure result
 
   runTerm :: Term -> Result
   runTerm mainTerm =
