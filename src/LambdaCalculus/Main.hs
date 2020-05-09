@@ -1,4 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -12,7 +14,8 @@ module LambdaCalculus.Main where
 import Control.Concurrent.Async (async, wait)
 import Control.Concurrent.STM (TVar, atomically, newTVarIO, stateTVar)
 import Control.Concurrent.STM.TMQueue (closeTMQueue, newTMQueueIO, readTMQueue, writeTMQueue)
-import Control.Exception (SomeException, mask, throwIO)
+import Control.DeepSeq (NFData, force)
+import Control.Exception (SomeException, evaluate, mask, throwIO)
 import Control.Monad (join, replicateM)
 import Control.Monad.Extra (whenJust, whenJustM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -24,6 +27,7 @@ import Data.List.Extra (maximumOn)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Maybe (listToMaybe)
 import Data.Ord (Down(Down))
+import GHC.Generics (Generic)
 import LambdaCalculus.SimplyTyped.DeBruijn
   ( GeneticTerm
   , Term(App)
@@ -141,7 +145,7 @@ data ArithResult
     ArithIncorrect
   | -- | A Church numeral and correct
     ArithCorrect
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Generic, NFData, Ord, Show)
 
 -- | Evaluates how correct a `Term` is an addition program.
 evaluateAddition :: Term -> [ArithResult]
@@ -173,7 +177,7 @@ data Result = Result
   , resultSubtraction :: [ArithResult]
   , resultTermSize :: Int
   }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Generic, NFData, Ord, Show)
 
 -- | Evaluates a score of a 'Result'. The larger, the better.
 resultScore :: Result -> Double
@@ -312,7 +316,7 @@ main = do
 
     runMeasureYield :: MonadIO m => Term -> ConduitT i Event m Result
     runMeasureYield m = do
-      (time, result) <- liftIO $ duration $ pure $! runTerm m
+      (time, result) <- liftIO $ duration $ evaluate $ force $ runTerm m
       C.yield $ RunEvent (m, result, time)
       pure result
 
