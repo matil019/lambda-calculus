@@ -125,6 +125,7 @@ pooledMapConcurrentlyC f as = do
 pooledForConcurrentlyC :: (MonadIO m, Traversable t) => t a -> (a -> ConduitT () o IO r) -> ConduitT i o m (t r)
 pooledForConcurrentlyC = flip pooledMapConcurrentlyC
 
+-- | Reduces a `Term` into the normal form within a certain computational limit.
 reduceTerm :: Term -> Term
 reduceTerm m = runConduitPure
    $ reduceSteps m
@@ -132,10 +133,19 @@ reduceTerm m = runConduitPure
   .| C.takeWhile ((<= 1000) . countTerm)
   .| C.lastDef m
 
-data ArithResult = ArithInvalid | ArithIncorrect | ArithCorrect
+-- | A result of a `Term` which represents an arithmetic program.
+data ArithResult
+  = -- | Not a Church numeral
+    ArithInvalid
+  | -- | A Church numeral but incorrect
+    ArithIncorrect
+  | -- | A Church numeral and correct
+    ArithCorrect
   deriving (Eq, Ord, Show)
 
+-- | Evaluates how correct a `Term` is an addition program.
 evaluateAddition :: Term -> [ArithResult]
+-- | Evaluates how correct a `Term` is a subtraction program.
 evaluateSubtraction :: Term -> [ArithResult]
 (evaluateAddition, evaluateSubtraction) = (go (+), go (-))
   where
