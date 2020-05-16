@@ -100,6 +100,7 @@ pattern Abs m <- Untyped ((\x -> case x of Typed.Abs m' -> Just (Untyped m'); _ 
 pattern App :: Term -> Term -> Term
 pattern App m n <- Untyped ((\x -> case x of Typed.App m' n' -> Just (Untyped m', Untyped n'); _ -> Nothing) -> Just (m, n))
   where App (Untyped m) (Untyped n) = Untyped (Typed.App m n)
+infixl 2 `App`
 
 {-# COMPLETE Var, Abs, App #-}
 
