@@ -147,7 +147,7 @@ index i m = at i (toList m)
 ixBound :: Int -> Traversal Term Term BoundTerm Term
 ixBound = loop []
   where
-  loop :: Applicative f => [Var] -> Int -> (BoundTerm -> f Term) -> Term -> f Term
+  loop :: [Var] -> Int -> Traversal Term Term BoundTerm Term
   loop bound i f m
     | i == 0 = f (BoundTerm{boundTerm = m, boundVars = bound})
     | i < 0 = pure m
