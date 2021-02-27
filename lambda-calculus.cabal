@@ -33,7 +33,7 @@ library
                        LambdaCalculus.Term.Types
                        LambdaCalculus.Utils
   -- other-modules:
-  build-depends:       base >=4.11 && <4.15
+  build-depends:       base >=4.12 && <4.15
                      , QuickCheck
                      , async
                      , conduit
