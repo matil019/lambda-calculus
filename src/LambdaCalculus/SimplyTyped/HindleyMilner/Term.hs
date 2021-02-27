@@ -177,7 +177,7 @@ data BoundTerm = BoundTerm
 ixBound :: Int -> Traversal Term Term BoundTerm Term
 ixBound = loop 0
   where
-  loop :: Applicative f => Int -> Int -> (BoundTerm -> f Term) -> Term -> f Term
+  loop :: Int -> Int -> Traversal Term Term BoundTerm Term
   loop boundNum i f m
     | i == 0 = f (BoundTerm{boundTerm = m, boundNum})
     | i < 0 = pure m
